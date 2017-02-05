@@ -1,3 +1,4 @@
+#if 0
 #include "trie.h"
 #include <assert.h>
 
@@ -29,3 +30,4 @@ TrieNode *newTN(){
 
 void delTN(TrieNode *node){
 }
+#endif

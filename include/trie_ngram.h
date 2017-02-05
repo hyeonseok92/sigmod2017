@@ -1,22 +1,29 @@
+#pragma once
 #include <iostream>
 #include <vector>
-
-#define MAX_NGRAM 10000
-#define SIZE_ALPHABET 37
-#define mapping(x) (((x) >= 'a' && (x) <= 'z') ? ((x)-'a') : ((x) == '.' ? 36 : ((x)-'0'+26))) 
+#include "trie_word.h"
+#define MAX_NGRAM 1000000
 
 struct TrieNode{
     int matched;
-    TrieNode *next[SIZE_ALPHABET];
+    TrieNode *next[MAX_WORD+1];
 };
 
 struct Ngram{
-    std::string ngram;
+    std::vector<int> ngram;
     std::vector<int> history;
-}
+};
 
 struct Trie{
     TrieNode node;
+    int cnt;
     Ngram ngrams[MAX_NGRAM];
-    int num_ngram;
 };
+
+void initTrie(Trie** trie);
+
+void destroyTrie(Trie** trie);
+
+void insertTrie(Trie* trie, std::vector<int> ngram);
+
+std::vector<int> searchTrie(Trie* trie, std::vector<int> query);

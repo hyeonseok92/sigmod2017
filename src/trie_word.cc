@@ -1,41 +1,69 @@
 #include "trie_word.h"
 #include <iostream>
-#define NULL 0
+#include <assert.h>
 
-#define newTrieNode() ((TrieNode*) calloc(1, sizeof(TrieNode)))
+#define newTrieWordNode() ((TrieWordNode*) calloc(1, sizeof(TrieWordNode)))
 
-void initTrie(Trie* trie){
-    trie = (Trie*) calloc(1, sizeof(Trie));
+void initTrieWord(TrieWord** trie){
+    *trie = (TrieWord*) calloc(1, sizeof(TrieWord));
 }
 
-void destroyTrieNode(TrieNode* node){
+void destroyTrieWordNode(TrieWordNode* node){
     int i;
     for (i = 0; i < SIZE_ALPHABET; i++){
-        if (node.next[i])
-            destroyTrie(node.next[i]);
+        if (node->next[i])
+            destroyTrieWordNode(node->next[i]);
     }
     free(node);
 }
 
-void destroyTrie(Trie* trie){
+void destroyTrieWord(TrieWord** trie){
     int i;
     for (i = 0; i < SIZE_ALPHABET; i++){
-        if (trie->node.next[i])
-            destroyTrieNode(trie->node.next[i]);
+        if ((*trie)->node.next[i])
+            destroyTrieWordNode((*trie)->node.next[i]);
     }
-    free(trie);
+    free(*trie);
+    *trie = NULL;
 }
 
-void insertTrieWord(TrieWord* trie, std::string ngram){
+int insertTrieWord(TrieWord* trie, std::string word){
     int m;
     TrieWordNode* node = &trie->node;
-    for (char& c : ngram){
+    TrieWordNode* newNode = NULL;
+    for (char& c : word){
         assert(c != 0);
-        m = mapping(ngram);
-        if (node.next[m] == NULL){
-            node.next[m] = newTrieNode();
+        m = mapping(c);
+        if (node->next[m] == NULL){
+            if (!newNode)
+                newNode = newTrieWordNode();
+            if (__sync_bool_compare_and_swap(&node->next[m], NULL, newNode)){
+                newNode = NULL;
+            }
         }
-        node = node.next[m];
+        node = node->next[m];
     }
-    node.matched = __sync_add_and_fetch(&trie->cnt, 1);
+    if (newNode)
+        free(newNode);
+    if (!node->matched){
+        if (__sync_bool_compare_and_swap(&node->matched, 0, 1)){
+            node->matched = __sync_add_and_fetch(&trie->cnt, 1);
+            trie->words[node->matched] = word;
+        }
+    }
+    return node->matched;
+}
+
+int searchTrieWord(TrieWord* trie, std::string word){
+    int m;
+    TrieWordNode* node = &trie->node;
+    for (char& c : word){
+        assert(c != 0);
+        m = mapping(c);
+        if (node->next[m] == NULL){
+            return 0;
+        }
+        node = node->next[m];
+    }
+    return node->matched;
 }
