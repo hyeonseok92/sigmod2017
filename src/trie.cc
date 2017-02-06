@@ -82,6 +82,9 @@ std::vector<std::string> queryNgramLow(Trie* trie, int ts, char *subquery){
                     last_add = node->add_hist[i];
                 }
             }
+            if (ts == 1002 && buf == std::string("components")){
+                ts = ts;
+            }
             for (int i = 0; i < node->num_del; i++){
                 if (node->del_hist[i] < ts && node->del_hist[i] > last_add){
                     last_add = -1;

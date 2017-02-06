@@ -27,22 +27,23 @@ void input(){
 void workload(){
     char cmd;
     char buf[WORK_BUF_SIZE];
-    int i = 0;
+    int ts = 0;
     fflush(stdout);
     while(!feof(stdin)){
-        i++;
+        ts++;
         scanf("%c", &cmd);
         if (cmd == 'F'){
+            fflush(stdout);
             continue;
         }
         scanf(" ");
         fgets(buf, WORK_BUF_SIZE, stdin);
         buf[strlen(buf)-1] = 0;
         if (cmd == 'A'){
-            addNgram(trie, i, buf);
+            addNgram(trie, ts, buf);
         }
         else if (cmd == 'Q'){
-            std::vector<std::string> res = queryNgram(trie, i, buf);
+            std::vector<std::string> res = queryNgram(trie, ts, buf);
             if (res.size()){
                 printf("%s", res[0].c_str());
                 for (int i = 1; i < res.size(); i++){
@@ -52,7 +53,10 @@ void workload(){
             }
         }
         else if (cmd == 'D'){
-            delNgram(trie, i, buf);
+            if (buf[0] =='c' && buf[1] == 'o' && buf[2] == 'm' && buf[3] == 'p'){
+                buf[0] = 'c';
+            }
+            delNgram(trie, ts, buf);
         }
     }
 }
