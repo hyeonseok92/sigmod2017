@@ -28,12 +28,14 @@ void workload(){
     char cmd;
     char buf[WORK_BUF_SIZE];
     int i = 0;
+    fflush(stdout);
     while(!feof(stdin)){
         i++;
-        scanf("%c ", &cmd);
+        scanf("%c", &cmd);
         if (cmd == 'F'){
             continue;
         }
+        scanf(" ");
         fgets(buf, WORK_BUF_SIZE, stdin);
         buf[strlen(buf)-1] = 0;
         if (cmd == 'A'){
@@ -56,7 +58,7 @@ void workload(){
 }
 
 int main(int argc, char *argv[]){
-    freopen("input.txt", "r", stdin);
+//    freopen("input.txt", "r", stdin);
     initTrie(&trie);
     input();
     workload();
