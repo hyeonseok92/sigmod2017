@@ -1,53 +1,65 @@
 #include <iostream>
-#include <fstream>
-#include <sstream>
+#include <stdio.h>
+#include <string.h>
 #include <vector>
 #include <assert.h>
-#include "trie_word.h"
-#include "trie_ngram.h"
+#include "trie.h"
 #define BUF_SIZE 1024
 
-TrieWord *trieWord;
 Trie *trie;
 
 void input(){
-    std::string buf;
-    std::string word;
-    std::vector<int> ngram;
+    char buf[BUF_SIZE];
     while(1){
-        std::getline(std::cin, buf);
-        if (buf == "S"){
+        fgets(buf, sizeof(buf), stdin);
+        if (buf[0] == 'S'){
             break;
         }
         else{
-            ngram.clear();
-            for (std::stringstream ss(buf); ss >> word; ){
-                ngram.push_back(insertTrieWord(trieWord, word));
-            }
-            insertTrie(trie, ngram);
+            buf[strlen(buf)-1] = 0;
+            printf("try addNgram\n");
+            addNgram(trie, 0, buf);
         }
     }
-    std::cout << "R" << std::endl;
+    printf("R\n");
+    printf("finish input\n");
 }
 
 void workload(){
-    std::vector<int> v;
-    std::vector<int> r;
-    v.push_back(3);
-    r = searchTrie(trie, v);
-    std::cout << r.size() << std::endl;
-    v.push_back(1);
-    r = searchTrie(trie, v);
-    std::cout << r.size() << std::endl;
+    char buf[BUF_SIZE];
+    char cmd;
+    int i = 0;
+    while(1){
+        i++;
+        scanf("%c", &cmd);
+        if (cmd == 'F'){
+            break;
+        }
+        fgets(buf, sizeof(buf), stdin);
+        buf[strlen(buf)-1] = 0;
+        if (cmd == 'A'){
+            addNgram(trie, i, buf);
+        }
+        else if (cmd == 'Q'){
+            std::vector<std::string> res = queryNgram(trie, i, buf);
+            if (res.size()){
+                printf("%s", res[0].c_str());
+                for (int i = 1; i < res.size(); i++){
+                    printf("|%s", res[i].c_str());
+                }
+            }
+        }
+        else if (cmd == 'D'){
+            delNgram(trie, i, buf);
+        }
+    }
 }
 
 int main(int argc, char *argv[]){
     freopen("input.txt", "r", stdin);
-    initTrieWord(&trieWord);
     initTrie(&trie);
     input();
     workload();
     destroyTrie(&trie);
-    destroyTrieWord(&trieWord);
     return 0;
 }
