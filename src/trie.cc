@@ -74,11 +74,9 @@ std::vector<std::string> queryNgramLow(Trie* trie, int ts, char *subquery){
     std::vector<std::string> res;
     std::string buf;
     TrieNode* node = &trie->node;
-    for (char *c = subquery; c != NULL; c++){
-        buf += *c;
-        m = mapping(*c);
-        if (node->num_add > 0){
-            int last_add;
+    for (char *c = subquery; ; c++){
+        if ((*c == ' ' || *c == 0) && node->num_add > 0){
+            int last_add = 0;
             for (int i = 0; i < node->num_add; i++){
                 if (node->add_hist[i] < ts && node->add_hist[i] > last_add){
                     last_add = node->add_hist[i];
@@ -94,6 +92,9 @@ std::vector<std::string> queryNgramLow(Trie* trie, int ts, char *subquery){
                 res.emplace_back(buf);
             }
         }
+        if (*c == 0) break;
+        buf += *c;
+        m = mapping(*c);
         if (node->next[m] == NULL){
             return res;
         }
@@ -106,7 +107,7 @@ std::vector<std::string> queryNgram(Trie* trie, int ts, char *query){
     std::vector<std::string> tmp;
     std::vector<std::string> res;
     std::unordered_set<std::string> dup_chk;
-    while(query != NULL){
+    while(*query != 0){
         tmp = queryNgramLow(trie, ts, query);
         for (std::string& s : tmp){
             if (dup_chk.find(s) == dup_chk.end()){

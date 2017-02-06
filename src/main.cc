@@ -17,12 +17,10 @@ void input(){
         }
         else{
             buf[strlen(buf)-1] = 0;
-            printf("try addNgram\n");
             addNgram(trie, 0, buf);
         }
     }
     printf("R\n");
-    printf("finish input\n");
 }
 
 void workload(){
@@ -31,11 +29,11 @@ void workload(){
     int i = 0;
     while(1){
         i++;
-        scanf("%c", &cmd);
+        scanf("%c ", &cmd);
         if (cmd == 'F'){
             break;
         }
-        fgets(buf, sizeof(buf), stdin);
+        fgets(buf, BUF_SIZE, stdin);
         buf[strlen(buf)-1] = 0;
         if (cmd == 'A'){
             addNgram(trie, i, buf);
@@ -47,6 +45,7 @@ void workload(){
                 for (int i = 1; i < res.size(); i++){
                     printf("|%s", res[i].c_str());
                 }
+                printf("\n");
             }
         }
         else if (cmd == 'D'){
