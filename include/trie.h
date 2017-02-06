@@ -2,9 +2,10 @@
 #include <iostream>
 #include <vector>
 
-#define SIZE_ALPHABET 38
+#define SIZE_ALPHABET 256
 #define MAX_HISTORY 100
-#define mapping(x) (((x) >= 'a' && (x) <= 'z') ? ((x)-'a') : ((x) == '.' ? 36 : ((x) == ' ' ? 37 : ((x)-'0'+26)))) 
+//#define mapping(x) (((x) >= 'a' && (x) <= 'z') ? ((x)-'a') : ((x) == '.' ? 36 : ((x) == ' ' ? 37 : ((x)-'0'+26)))) 
+#define mapping(x) ((unsigned char)x)
 
 struct TrieNode{
     TrieNode *next[SIZE_ALPHABET];

@@ -4,12 +4,13 @@
 #include <vector>
 #include <assert.h>
 #include "trie.h"
-#define BUF_SIZE 1024
+#define INPUT_BUF_SIZE 1024
+#define WORK_BUF_SIZE 262144
 
 Trie *trie;
 
 void input(){
-    char buf[BUF_SIZE];
+    char buf[INPUT_BUF_SIZE];
     while(1){
         fgets(buf, sizeof(buf), stdin);
         if (buf[0] == 'S'){
@@ -24,16 +25,16 @@ void input(){
 }
 
 void workload(){
-    char buf[BUF_SIZE];
     char cmd;
+    char buf[WORK_BUF_SIZE];
     int i = 0;
-    while(1){
+    while(!feof(stdin)){
         i++;
         scanf("%c ", &cmd);
         if (cmd == 'F'){
-            break;
+            continue;
         }
-        fgets(buf, BUF_SIZE, stdin);
+        fgets(buf, WORK_BUF_SIZE, stdin);
         buf[strlen(buf)-1] = 0;
         if (cmd == 'A'){
             addNgram(trie, i, buf);
