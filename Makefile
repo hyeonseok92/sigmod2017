@@ -10,7 +10,7 @@ OBJECTS := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.o))
 DBG_OBJECTS := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.dbg.o))
 CFLAGS := -Wall -O3 -D NDEBUG -std=c++11
 DBGCFLAGS := -Wall -O0 -std=c++11 -g
-LIB := -lpthread -L lib
+LIB := -lpthread -ljemalloc -L lib
 INC := -I include
 
 $(TARGET): $(OBJECTS)
