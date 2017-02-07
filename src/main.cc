@@ -1,62 +1,80 @@
 #include <iostream>
-#include <stdio.h>
 #include <string.h>
 #include <vector>
+#include <unordered_set>
 #include <assert.h>
 #include "trie.h"
-#define INPUT_BUF_SIZE 1024
-#define WORK_BUF_SIZE 262144
 
-Trie *trie;
+TrieNode *trie;
 
 void input(){
-    char buf[INPUT_BUF_SIZE];
+    std::string buf;
     while(1){
-        fgets(buf, sizeof(buf), stdin);
-        if (buf[0] == 'S'){
+        std::getline(std::cin, buf);
+        //std::cerr << buf << std::endl;
+        if (buf.compare("S") == 0){
             break;
         }
         else{
-            buf[strlen(buf)-1] = 0;
-            addNgram(trie, 0, buf);
+            addNgram(trie, buf);
         }
     }
     printf("R\n");
 }
 
 void workload(){
-    char cmd;
-    char buf[WORK_BUF_SIZE];
+    std::string cmd;
     int ts = 0;
+    std::string buf;
     fflush(stdout);
-    while(!feof(stdin)){
-        ts++;
-        scanf("%c", &cmd);
-        if (cmd == 'F'){
+    while(!std::cin.eof()){
+        ++ts;
+        std::cin >> cmd;
+        //std::cerr << cmd;
+        if (cmd.compare("F") == 0){
             fflush(stdout);
-            continue;
+            std::cin >> cmd;
+            if (cmd.compare("F") == 0){
+                break;
+            }
+            //std::cerr << cmd;
         }
-        scanf(" ");
-        fgets(buf, WORK_BUF_SIZE, stdin);
-        buf[strlen(buf)-1] = 0;
-        if (cmd == 'A'){
-            addNgram(trie, ts, buf);
+        std::cin.get();
+        std::getline(std::cin, buf);
+        //std::cerr << " " << buf << std::endl; 
+        if (cmd.compare("A") == 0){
+            addNgram(trie, buf);
         }
-        else if (cmd == 'Q'){
-            std::vector<std::string> res = queryNgram(trie, ts, buf);
-            if (res.size()){
-                printf("%s", res[0].c_str());
-                for (int i = 1; i < res.size(); i++){
-                    printf("|%s", res[i].c_str());
+        else if (cmd.compare("Q") == 0){
+            std::vector<std::string> res;
+            std::unordered_set<std::string> exist_chk;
+            std::vector<std::string> tmp;
+            res.clear();
+            for (std::string::const_iterator it = buf.begin();; it++){
+                tmp = queryNgram(trie, &(*it));
+                for (std::vector<std::string>::iterator it2 = tmp.begin(); it2 != tmp.end(); it2++){
+                    if (exist_chk.find(*it2) == exist_chk.end()){
+                        res.emplace_back(*it2);
+                        exist_chk.insert(*it2);
+                    }
                 }
-                printf("\n");
+                while(it != buf.end() && *it != ' ') it++;
+                if (it == buf.end())
+                    break;
             }
+            if (res.size()){
+                std::cout << res[0];
+                for (std::vector<std::string>::const_iterator it = ++res.begin(); it != res.end(); it++){
+                    std::cout << "|" << *it;
+                }
+            }
+            else{
+                std::cout << -1;
+            }
+            std::cout << std::endl;
         }
-        else if (cmd == 'D'){
-            if (buf[0] =='c' && buf[1] == 'o' && buf[2] == 'm' && buf[3] == 'p'){
-                buf[0] = 'c';
-            }
-            delNgram(trie, ts, buf);
+        else if (cmd.compare("D") == 0){
+            delNgram(trie, buf);
         }
     }
 }
@@ -66,6 +84,6 @@ int main(int argc, char *argv[]){
     initTrie(&trie);
     input();
     workload();
-    destroyTrie(&trie);
+    destroyTrie(trie);
     return 0;
 }

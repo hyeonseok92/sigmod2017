@@ -1,30 +1,19 @@
 #pragma once
 #include <iostream>
+#include <map>
 #include <vector>
 
-#define SIZE_ALPHABET 256
-#define MAX_HISTORY 100
-//#define mapping(x) (((x) >= 'a' && (x) <= 'z') ? ((x)-'a') : ((x) == '.' ? 36 : ((x) == ' ' ? 37 : ((x)-'0'+26)))) 
-#define mapping(x) ((unsigned char)x)
-
+struct TrieNode;
+typedef std::map<char, TrieNode*> TrieMap;
 struct TrieNode{
-    TrieNode *next[SIZE_ALPHABET];
-    int num_add;
-    int add_hist[MAX_HISTORY];
-    int num_del;
-    int del_hist[MAX_HISTORY];
-};
-
-struct Trie{
-    TrieNode node;
+    bool exist;
     int cnt;
+    TrieMap next;
 };
 
-void initTrie(Trie** trie);
-void destroyTrie(Trie** trie);
+void initTrie(TrieNode** node);
+void destroyTrie(TrieNode* node);
 
-void addNgram(Trie* trie, int ts, char *ngram);
-void delNgram(Trie* trie, int ts, char *ngram);
-
-std::vector<std::string> queryNgram(Trie* trie, int ts, char *query);
-
+void addNgram(TrieNode* node, std::string const &ngram);
+void delNgram(TrieNode* node, std::string const &ngram);
+std::vector<std::string> queryNgram(TrieNode* trie, const char *query);
