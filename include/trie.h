@@ -11,6 +11,8 @@ struct TrieNode{
     TrieMap next;
 };
 
+#define newTrieNode() ((TrieNode*) calloc(1, sizeof(TrieNode)))
+
 void initTrie(TrieNode** node);
 void destroyTrie(TrieNode* node);
 //void initJemalloc();
