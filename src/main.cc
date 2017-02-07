@@ -24,24 +24,19 @@ void input(){
 
 void workload(){
     std::string cmd;
-    int ts = 0;
     std::string buf;
     fflush(stdout);
     while(!std::cin.eof()){
-        ++ts;
         std::cin >> cmd;
-        //std::cerr << cmd;
         if (cmd.compare("F") == 0){
             fflush(stdout);
             std::cin >> cmd;
             if (cmd.compare("F") == 0){
                 break;
             }
-            //std::cerr << cmd;
         }
         std::cin.get();
         std::getline(std::cin, buf);
-        //std::cerr << " " << buf << std::endl; 
         if (cmd.compare("A") == 0){
             addNgram(trie, buf);
         }
@@ -81,6 +76,7 @@ void workload(){
 
 int main(int argc, char *argv[]){
 //    freopen("input.txt", "r", stdin);
+    std::ios::sync_with_stdio(false);
     initTrie(&trie);
     input();
     workload();
