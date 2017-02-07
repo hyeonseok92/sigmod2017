@@ -11,7 +11,6 @@ void input(){
     std::string buf;
     while(1){
         std::getline(std::cin, buf);
-        //std::cerr << buf << std::endl;
         if (buf.compare("S") == 0){
             break;
         }
@@ -19,12 +18,12 @@ void input(){
             addNgram(trie, buf);
         }
     }
-    printf("R\n");
 }
 
 void workload(){
     std::string cmd;
     std::string buf;
+    printf("R\n");
     fflush(stdout);
     while(!std::cin.eof()){
         std::cin >> cmd;
@@ -75,7 +74,6 @@ void workload(){
 }
 
 int main(int argc, char *argv[]){
-//    freopen("input.txt", "r", stdin);
     std::ios::sync_with_stdio(false);
     initTrie(&trie);
     input();
