@@ -9,7 +9,7 @@
 #include "thread_struct.h"
 
 #define NUM_THREAD 40
-#define my_hash(x) ((x)%NUM_THREAD)
+#define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
 #define USE_YIELD
 
@@ -20,7 +20,6 @@
 #endif
 
 #define FLAG_NONE 0
-#define FLAG_READY 1
 #define FLAG_QUERY 2
 #define FLAG_END 3
 
@@ -28,11 +27,10 @@ TrieNode *trie;
 pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
 
-#ifdef DBG_TS
 int ts = 0;
-#endif
 
 int global_flag;
+int finished[NUM_THREAD];
 int sync_val;
 std::vector<std::string> res[NUM_THREAD];
 const char *query_str;
@@ -65,12 +63,9 @@ void *thread_main(void *arg){
                 if (end-query_str > size_query){
                     end = query_str + size_query;
                 }
-                myqueue->head = 0;
-                myqueue->tail = 0;
-                __sync_fetch_and_add(&sync_val,1);
+                myqueue->head = myqueue->tail = 0;
+                finished[tid] = ts;
                 myres->clear();
-                __sync_synchronize(); //Prevent Code Relocation
-                while(global_flag == FLAG_READY) my_yield();
                 __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){
                     if (*c == ' ')
@@ -79,6 +74,8 @@ void *thread_main(void *arg){
                         while(c != end && *(c-1) != ' ') c++;
                     if (c == end)
                         break;
+                    while(finished[my_hash(*c)] != ts)
+                        my_yield();
                     tmp = queryNgram(trie, c);
                     for (std::vector<std::string>::const_iterator it = tmp.begin(); it != tmp.end(); it++){
                         if (exist_chk.find(*it) == exist_chk.end()){
@@ -88,13 +85,13 @@ void *thread_main(void *arg){
                     }
                 }
                 __sync_synchronize(); //Prevent Code Relocation
-                assert(myqueue->head == 0 && myqueue->tail == 0);
-                __sync_fetch_and_sub(&sync_val,1);
+                __sync_fetch_and_add(&sync_val, 1);
                 __sync_synchronize(); //Prevent Code Relocation
-                while(global_flag == FLAG_QUERY) my_yield();
+                while(global_flag == FLAG_QUERY && finished[tid] == ts){
+                    my_yield();
+                }
             }
         }
-        assert(myqueue->head < myqueue->tail);
         op = &(myqueue->operations[myqueue->head++]);
         first_ch = *(op->str.begin());
         op->str.erase(op->str.begin());
@@ -162,22 +159,20 @@ void workload(){
             worker->tail++;
         }
         else if (cmd.compare("Q") == 0){
+            ts++;
 #ifdef DBG_TS
-            std::cout << ++ts << " ";
+            std::cout << ts << " ";
 #endif
             std::vector<std::string> answer;
             std::unordered_set<std::string> exist_chk;
 
             query_str = buf.c_str();
             size_query = buf.size();
-            __sync_synchronize(); //Prevent Code Relocation
-            global_flag = FLAG_READY;
-            __sync_synchronize(); //Prevent Code Relocation
-            while(sync_val != NUM_THREAD) my_yield();
+            sync_val = 0;
             __sync_synchronize(); //Prevent Code Relocation
             global_flag = FLAG_QUERY;
             __sync_synchronize(); //Prevent Code Relocation
-            while(sync_val != 0) my_yield();
+            while(sync_val != NUM_THREAD) my_yield();
             __sync_synchronize(); //Prevent Code Relocation
             global_flag = FLAG_NONE;
 
@@ -199,6 +194,7 @@ void workload(){
                 std::cout << -1;
             }
             std::cout << std::endl;
+            //__sync_synchronize(); //Store Memory Barrier
         }
         else{
             buf.erase(buf.begin());
