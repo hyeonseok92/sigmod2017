@@ -9,7 +9,7 @@
 #include "thread_struct.h"
 
 #define NUM_THREAD 40
-#define my_hash(x) ((x)%NUM_THREAD)
+#define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
 #define USE_YIELD
 
