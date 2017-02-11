@@ -10,6 +10,7 @@
 
 #define NUM_THREAD 40
 #define my_hash(x) ((x)%NUM_THREAD)
+#define my_yield() pthread_yield() //usleep(1)
 
 #define FLAG_NONE 0
 #define FLAG_READY 1
@@ -39,7 +40,7 @@ void *thread_main(void *arg){
     while(1){
         while(myqueue->head == myqueue->tail){
             if (global_flag == FLAG_NONE){
-                usleep(1);
+                my_yield();
                 continue;
             }
             else if (global_flag == FLAG_END){
@@ -58,7 +59,7 @@ void *thread_main(void *arg){
                     end = query_str + size_query;
                 }
                 myres->clear();
-                while(global_flag == FLAG_READY) usleep(1);
+                while(global_flag == FLAG_READY) my_yield();
                 //Safe until now
                 for(const char *c = start; c < end; c++){
                     if (*c == ' ')
@@ -76,7 +77,7 @@ void *thread_main(void *arg){
                     }
                 }
                 __sync_fetch_and_sub(&sync_val,1);
-                while(global_flag == FLAG_QUERY) usleep(1);
+                while(global_flag == FLAG_QUERY) my_yield();
             }
         }
         op = &(myqueue->operations[myqueue->head]);
@@ -159,9 +160,9 @@ void workload(){
             size_query = buf.size();
             __sync_synchronize();
             global_flag = FLAG_READY;
-            while(sync_val != NUM_THREAD) usleep(1);
+            while(sync_val != NUM_THREAD) my_yield();
             global_flag = FLAG_QUERY;
-            while(sync_val != 0) usleep(1);
+            while(sync_val != 0) my_yield();
 
             for (int i = 0; i < NUM_THREAD; i++){
                 for (std::vector<std::string>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
@@ -196,6 +197,8 @@ void workload(){
 }
 
 int main(int argc, char *argv[]){
+//    freopen("input3.txt","r",stdin);
+//    freopen("output.txt","w",stdout);
     std::ios::sync_with_stdio(false);
     initTrie(&trie);
 #ifdef DBG_LOG
