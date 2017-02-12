@@ -15,7 +15,6 @@ struct TrieNode{
 
 void initTrie(TrieNode** node);
 void destroyTrie(TrieNode* node);
-//void initJemalloc();
 
 void addNgram(TrieNode* node, std::string const &ngram);
 void delNgram(TrieNode* node, std::string const &ngram);

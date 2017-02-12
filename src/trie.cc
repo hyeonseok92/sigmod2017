@@ -5,23 +5,10 @@
 #include <unordered_set>
 #include <jemalloc/jemalloc.h>
 
-#define newTrieNode() ((TrieNode*) calloc(1, sizeof(TrieNode)))
-
-#define JEMALLOC_POOL_SIZE 10000
-
 void initTrie(TrieNode** node){
     *node = (TrieNode*) calloc(1, sizeof(TrieNode));
     (*node)->next.clear();
 }
-/*
-void initJemalloc(){
-    TrieNode *dummy;
-    for (int i = 0; i < JEMALLOC_POOL_SIZE; i++){
-        dummy = newTrieNode();
-        free(dummy);
-    }
-}
-*/
 
 void destroyTrie(TrieNode* node){
     for (TrieMap::iterator it = node->next.begin(); it !=  node->next.end(); it++){
