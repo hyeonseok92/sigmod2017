@@ -10,7 +10,14 @@
 
 #define NUM_THREAD 40
 #define my_hash(x) ((x)%NUM_THREAD)
-#define my_yield() pthread_yield() //usleep(1)
+
+//#define USE_YIELD
+
+#ifdef USE_YIELD
+#define my_yield() pthread_yield()
+#else
+#define my_yield() usleep(1)
+#endif
 
 #define FLAG_NONE 0
 #define FLAG_READY 1
@@ -47,9 +54,6 @@ void *thread_main(void *arg){
                 pthread_exit((void*)NULL);
             }
             else{
-                myqueue->head = myqueue->tail = 0;
-                __sync_fetch_and_add(&sync_val,1);
-
                 std::unordered_set<std::string> exist_chk;
                 std::vector<std::string> tmp;
                 int size = 1 + (size_query-1) / NUM_THREAD;
@@ -58,9 +62,13 @@ void *thread_main(void *arg){
                 if (end-query_str > size_query){
                     end = query_str + size_query;
                 }
+                myqueue->head = 0;
+                myqueue->tail = 0;
+                __sync_fetch_and_add(&sync_val,1);
                 myres->clear();
+                __sync_synchronize();
                 while(global_flag == FLAG_READY) my_yield();
-                //Safe until now
+                __sync_synchronize();
                 for(const char *c = start; c < end; c++){
                     if (*c == ' ')
                         c++;
@@ -76,20 +84,21 @@ void *thread_main(void *arg){
                         }
                     }
                 }
+                __sync_synchronize();
+                assert(myqueue->head == 0 && myqueue->tail == 0);
                 __sync_fetch_and_sub(&sync_val,1);
+                __sync_synchronize();
                 while(global_flag == FLAG_QUERY) my_yield();
             }
         }
-        op = &(myqueue->operations[myqueue->head]);
+        assert(myqueue->head < myqueue->tail);
+        op = &(myqueue->operations[myqueue->head++]);
         first_ch = *(op->str.begin());
         op->str.erase(op->str.begin());
-        if (op->cmd == 'A'){
+        if (op->cmd == 'A')
             addNgram(trie->next[first_ch], op->str);
-        }
-        else{
+        else
             delNgram(trie->next[first_ch], op->str);
-        }
-        myqueue->head++;
     }
     pthread_exit((void*)NULL);
 }
@@ -160,9 +169,14 @@ void workload(){
             size_query = buf.size();
             __sync_synchronize();
             global_flag = FLAG_READY;
+            __sync_synchronize();
             while(sync_val != NUM_THREAD) my_yield();
+            __sync_synchronize();
             global_flag = FLAG_QUERY;
+            __sync_synchronize();
             while(sync_val != 0) my_yield();
+            __sync_synchronize();
+            global_flag = FLAG_NONE;
 
             for (int i = 0; i < NUM_THREAD; i++){
                 for (std::vector<std::string>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
@@ -172,7 +186,6 @@ void workload(){
                     }
                 }
             }
-
             if (answer.size()){
                 std::cout << answer[0];
                 for (std::vector<std::string>::const_iterator it = ++answer.begin(); it != answer.end(); it++){
@@ -183,7 +196,6 @@ void workload(){
                 std::cout << -1;
             }
             std::cout << std::endl;
-            global_flag = FLAG_NONE;
         }
         else{
             buf.erase(buf.begin());

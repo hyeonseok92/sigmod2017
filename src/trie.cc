@@ -34,6 +34,7 @@ void addNgram(TrieNode* node, std::string const& ngram){
     TrieMap::iterator temp;
     TrieNode *newNode;
     for (std::string::const_iterator it = ngram.begin(); it != ngram.end(); it++){
+        assert(node != NULL);
         node->cnt++;
         temp = node->next.find(*it);
         if (temp == node->next.end()){
@@ -46,6 +47,7 @@ void addNgram(TrieNode* node, std::string const& ngram){
             node = temp->second;
     }
     node->cnt++;
+    assert(node->exist != true);
     node->exist = true;
 }
 
@@ -62,6 +64,7 @@ void delNgram(TrieNode *node, std::string const& ngram){
     
     for (it = ngram.begin(); it != ngram.end(); it++){
         node->cnt--;
+        assert(node->cnt > 0);
         temp = node->next.find(*it);
         assert(temp != node->next.end());
         next = temp->second;
@@ -74,6 +77,8 @@ void delNgram(TrieNode *node, std::string const& ngram){
     }
     if (it == ngram.end()){
         node->cnt--;
+        assert(node->cnt > 0);
+        assert(node->exist != false);
         node->exist = false;
         return;
     }
