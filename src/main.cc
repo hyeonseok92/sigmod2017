@@ -20,26 +20,26 @@
 #endif
 
 #define FLAG_NONE 0
-#define FLAG_QUERY 2
+#define FLAG_QUERY 1
 #define FLAG_END 3
 
 TrieNode *trie;
 pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
 
-int ts = 0;
+unsigned int ts = 1;
 
 int global_flag;
-int finished[NUM_THREAD];
+unsigned int finished[NUM_THREAD];
 int sync_val;
-std::vector<std::string> res[NUM_THREAD];
+std::vector<cand_t> res[NUM_THREAD];
 const char *query_str;
 int size_query;
 
 void *thread_main(void *arg){
     ThrArg *myqueue = (ThrArg*)arg;
     int tid = myqueue->tid;
-    std::vector<std::string> *myres = &res[tid];
+    std::vector<cand_t> *my_res = &res[tid];
     Operation *op;
     char first_ch;
     while(1){
@@ -55,8 +55,6 @@ void *thread_main(void *arg){
                 __sync_synchronize(); //Load Memory barrier
                 if (myqueue->head != myqueue->tail) break;
                 __sync_synchronize(); //Prevent Code Relocation
-                std::unordered_set<std::string> exist_chk;
-                std::vector<std::string> tmp;
                 int size = 1 + (size_query-1) / NUM_THREAD;
                 const char *start = query_str + size * tid;
                 const char *end = start + size;
@@ -65,7 +63,7 @@ void *thread_main(void *arg){
                 }
                 myqueue->head = myqueue->tail = 0;
                 finished[tid] = ts;
-                myres->clear();
+                my_res->clear();
                 __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){
                     if (*c == ' ')
@@ -76,13 +74,7 @@ void *thread_main(void *arg){
                         break;
                     while(finished[my_hash(*c)] != ts)
                         my_yield();
-                    tmp = queryNgram(trie, c);
-                    for (std::vector<std::string>::const_iterator it = tmp.begin(); it != tmp.end(); it++){
-                        if (exist_chk.find(*it) == exist_chk.end()){
-                            myres->emplace_back(*it);
-                            exist_chk.insert(*it);
-                        }
-                    }
+                    queryNgram(my_res, MY_TS(tid), trie, c);
                 }
                 __sync_synchronize(); //Prevent Code Relocation
                 __sync_fetch_and_add(&sync_val, 1);
@@ -146,26 +138,32 @@ void workload(){
         std::getline(std::cin, buf);
         if (cmd.compare("A") == 0){
             buf.erase(buf.begin());
-            char x = *buf.begin();
-            if (trie->next.find(x) == trie->next.end()){
+            char first_ch = *buf.begin();
+            if (trie->next.find(first_ch) == trie->next.end()){
                 TrieNode *newNode = newTrieNode();
+                newNode->ts = 0xFFFFFFFF;
                 newNode->next.clear();
-                trie->next[x] = newNode;
+                trie->next[first_ch] = newNode;
             }
-            ThrArg *worker = &args[my_hash(x)];
+            ThrArg *worker = &args[my_hash(first_ch)];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;
             __sync_synchronize(); //Prevent Code Relocation
             worker->tail++;
         }
-        else if (cmd.compare("Q") == 0){
+        else if (cmd.compare("D") == 0){
+            buf.erase(buf.begin());
+            ThrArg *worker = &args[my_hash(*buf.begin())];
+            worker->operations[worker->tail].cmd = *(cmd.begin());
+            worker->operations[worker->tail].str = buf;
+            __sync_synchronize(); //Prevent Code Relocation
+            worker->tail++;
+        }
+        else{
             ts++;
 #ifdef DBG_TS
             std::cout << ts << " ";
 #endif
-            std::vector<std::string> answer;
-            std::unordered_set<std::string> exist_chk;
-
             query_str = buf.c_str();
             size_query = buf.size();
             sync_val = 0;
@@ -174,35 +172,22 @@ void workload(){
             __sync_synchronize(); //Prevent Code Relocation
             while(sync_val != NUM_THREAD) my_yield();
             __sync_synchronize(); //Prevent Code Relocation
-            global_flag = FLAG_NONE;
-
+            bool print_answer = false;
             for (int i = 0; i < NUM_THREAD; i++){
-                for (std::vector<std::string>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
-                    if (exist_chk.find(*it) == exist_chk.end()){
-                        answer.emplace_back(*it);
-                        exist_chk.insert(*it);
+                unsigned int my_ts = MY_TS(i);
+                for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
+                    if (it->second->ts == my_ts){
+                        if (print_answer)
+                            std::cout << "|";
+                        print_answer = true;
+                        std::cout << it->first;
                     }
                 }
             }
-            if (answer.size()){
-                std::cout << answer[0];
-                for (std::vector<std::string>::const_iterator it = ++answer.begin(); it != answer.end(); it++){
-                    std::cout << "|" << *it;
-                }
-            }
-            else{
+            if (!print_answer)
                 std::cout << -1;
-            }
             std::cout << std::endl;
-            //__sync_synchronize(); //Store Memory Barrier
-        }
-        else{
-            buf.erase(buf.begin());
-            ThrArg *worker = &args[my_hash(*buf.begin())];
-            worker->operations[worker->tail].cmd = *(cmd.begin());
-            worker->operations[worker->tail].str = buf;
-            __sync_synchronize(); //Prevent Code Relocation
-            worker->tail++;
+            global_flag = FLAG_NONE;
         }
     }
 }

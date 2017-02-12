@@ -2,7 +2,6 @@
 #include <iostream>
 #include <assert.h>
 #include <vector>
-#include <unordered_set>
 #include <jemalloc/jemalloc.h>
 
 void initTrie(TrieNode** node){
@@ -26,6 +25,7 @@ void addNgram(TrieNode* node, std::string const& ngram){
         temp = node->next.find(*it);
         if (temp == node->next.end()){
             newNode = newTrieNode();
+            newNode->ts = 0xFFFFFFFF;
             newNode->next.clear();
             node->next[*it] = newNode;
             node = newNode;
@@ -34,8 +34,7 @@ void addNgram(TrieNode* node, std::string const& ngram){
             node = temp->second;
     }
     node->cnt++;
-    assert(node->exist != true);
-    node->exist = true;
+    node->ts = 1;
 }
 
 void delNgram(TrieNode *node, std::string const& ngram){
@@ -45,7 +44,7 @@ void delNgram(TrieNode *node, std::string const& ngram){
 
     if (ngram.begin() == ngram.end()){
         node->cnt--;
-        node->exist = false;
+        node->ts = 0xFFFFFFFF;
         return;
     }
     
@@ -64,9 +63,7 @@ void delNgram(TrieNode *node, std::string const& ngram){
     }
     if (it == ngram.end()){
         node->cnt--;
-        assert(node->cnt > 0);
-        assert(node->exist != false);
-        node->exist = false;
+        node->ts = 0xFFFFFFFF;
         return;
     }
     for (++it; it != ngram.end(); it++){
@@ -77,22 +74,32 @@ void delNgram(TrieNode *node, std::string const& ngram){
     free(node);
 }
 
-std::vector<std::string> queryNgram(TrieNode* node,const char *query){
-    std::vector<std::string> res;
+void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
     std::string buf;
     TrieMap::iterator temp;
+    unsigned int node_ts;
     for (const char* it = query; *it != 0; it++){
-        if (node->exist && (*it == 0 || *it == ' ')){
-            res.emplace_back(buf);
+        node_ts = node->ts;
+        while (node_ts < my_ts && *it == ' '){
+            if (__sync_bool_compare_and_swap(&node->ts, node_ts, my_ts)){
+                cands->emplace_back(make_pair(buf, node));
+                break;
+            }
+            node_ts = node->ts;
         }
         buf += *it;
         temp = node->next.find(*it);
-        if (temp == node->next.end()){
-            return res;
-        }
+        if (temp == node->next.end())
+            return;
         node = temp->second;
     }
-    if (node->exist)
-        res.emplace_back(buf);
-    return res;
+    node_ts = node->ts;
+    while (node_ts < my_ts){
+        if (__sync_bool_compare_and_swap(&node->ts, node_ts, my_ts)){
+            cands->emplace_back(make_pair(buf, node));
+            break;
+        }
+        node_ts = node->ts;
+    }
+    return;
 }
