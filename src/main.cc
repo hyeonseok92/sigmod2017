@@ -11,7 +11,7 @@
 #define NUM_THREAD 40
 #define my_hash(x) ((x)%NUM_THREAD)
 
-//#define USE_YIELD
+#define USE_YIELD
 
 #ifdef USE_YIELD
 #define my_yield() pthread_yield()
