@@ -54,6 +54,9 @@ void *thread_main(void *arg){
                 pthread_exit((void*)NULL);
             }
             else{
+                __sync_synchronize(); //Load Memory barrier
+                if (myqueue->head != myqueue->tail) break;
+                __sync_synchronize(); //Prevent Code Relocation
                 std::unordered_set<std::string> exist_chk;
                 std::vector<std::string> tmp;
                 int size = 1 + (size_query-1) / NUM_THREAD;
@@ -66,9 +69,9 @@ void *thread_main(void *arg){
                 myqueue->tail = 0;
                 __sync_fetch_and_add(&sync_val,1);
                 myres->clear();
-                __sync_synchronize();
+                __sync_synchronize(); //Prevent Code Relocation
                 while(global_flag == FLAG_READY) my_yield();
-                __sync_synchronize();
+                __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){
                     if (*c == ' ')
                         c++;
@@ -84,10 +87,10 @@ void *thread_main(void *arg){
                         }
                     }
                 }
-                __sync_synchronize();
+                __sync_synchronize(); //Prevent Code Relocation
                 assert(myqueue->head == 0 && myqueue->tail == 0);
                 __sync_fetch_and_sub(&sync_val,1);
-                __sync_synchronize();
+                __sync_synchronize(); //Prevent Code Relocation
                 while(global_flag == FLAG_QUERY) my_yield();
             }
         }
@@ -155,7 +158,7 @@ void workload(){
             ThrArg *worker = &args[my_hash(x)];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;
-            __sync_synchronize();
+            __sync_synchronize(); //Prevent Code Relocation
             worker->tail++;
         }
         else if (cmd.compare("Q") == 0){
@@ -167,15 +170,15 @@ void workload(){
 
             query_str = buf.c_str();
             size_query = buf.size();
-            __sync_synchronize();
+            __sync_synchronize(); //Prevent Code Relocation
             global_flag = FLAG_READY;
-            __sync_synchronize();
+            __sync_synchronize(); //Prevent Code Relocation
             while(sync_val != NUM_THREAD) my_yield();
-            __sync_synchronize();
+            __sync_synchronize(); //Prevent Code Relocation
             global_flag = FLAG_QUERY;
-            __sync_synchronize();
+            __sync_synchronize(); //Prevent Code Relocation
             while(sync_val != 0) my_yield();
-            __sync_synchronize();
+            __sync_synchronize(); //Prevent Code Relocation
             global_flag = FLAG_NONE;
 
             for (int i = 0; i < NUM_THREAD; i++){
@@ -202,7 +205,7 @@ void workload(){
             ThrArg *worker = &args[my_hash(*buf.begin())];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;
-            __sync_synchronize();
+            __sync_synchronize(); //Prevent Code Relocation
             worker->tail++;
         }
     }
