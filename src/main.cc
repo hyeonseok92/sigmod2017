@@ -30,7 +30,8 @@ ThrArg args[NUM_THREAD];
 unsigned int ts;
 
 int global_flag;
-unsigned int started[NUM_THREAD];
+unsigned int modify_head[256];
+unsigned int modify_tail[256];
 unsigned int finished[NUM_THREAD];
 std::vector<cand_t> res[NUM_THREAD];
 const char *query_str;
@@ -42,6 +43,7 @@ void *thread_main(void *arg){
     std::vector<cand_t> *my_res = &res[tid];
     Operation *op;
     char first_ch;
+    unsigned int last_query = 0;
     while(1){
         while(myqueue->head == myqueue->tail){
             if (global_flag == FLAG_NONE){
@@ -49,7 +51,7 @@ void *thread_main(void *arg){
                 continue;
             }
             else if (global_flag == FLAG_QUERY){
-                if (started[tid] == ts){
+                if (last_query == ts){
                     my_yield();
                     continue;
                 }
@@ -63,7 +65,7 @@ void *thread_main(void *arg){
                     end = query_str + size_query;
                 }
                 myqueue->head = myqueue->tail = 0;
-                started[tid] = ts;
+                last_query = ts;
                 my_res->clear();
                 __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){
@@ -73,7 +75,7 @@ void *thread_main(void *arg){
                         while(c != end && *(c-1) != ' ') c++;
                     if (c == end)
                         break;
-                    while(started[my_hash(*c)] != ts)
+                    while(modify_head[(unsigned char)*c] != modify_tail[(unsigned char)*c])
                         my_yield();
                     queryNgram(my_res, MY_TS(tid), trie, c);
                 }
@@ -98,6 +100,8 @@ void *thread_main(void *arg){
         }
         else
             delNgram(node, op->str);
+        __sync_synchronize();
+        modify_head[(unsigned char)first_ch]++;
     }
     pthread_exit((void*)NULL);
 }
@@ -151,6 +155,7 @@ void workload(){
             ThrArg *worker = &args[my_hash(first_ch)];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;
+            modify_tail[(unsigned char)first_ch]++;
             __sync_synchronize(); //Prevent Code Relocation
             worker->tail++;
         }
@@ -166,8 +171,8 @@ void workload(){
             __sync_synchronize(); //Prevent Code Relocation
             bool print_answer = false;
             for (int i = 0; i < NUM_THREAD; i++){
-                while(finished[i] != ts) my_yield();
                 unsigned int my_ts = MY_TS(i);
+                while(finished[i] != ts) my_yield();
                 for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
                     if (it->second->ts == my_ts){
                         if (print_answer)
