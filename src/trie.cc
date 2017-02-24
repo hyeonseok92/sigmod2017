@@ -16,43 +16,46 @@ void destroyTrie(TrieNode* node){
     free(node);
 }
 
-void addNgram(TrieNode* node, std::string const& ngram){
+void addNgram(TrieNode* node, const char *ngram){
     TrieMap::iterator temp;
     TrieNode *newNode;
-    for (std::string::const_iterator it = ngram.begin(); it != ngram.end(); it++){
-        assert(node != NULL);
+    for (const char *it = ngram; *it; ){
+        mbyte_t key = 0;
+        for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
+            key += (((mbyte_t)*it) << (i*8));
         node->cnt++;
-        temp = node->next.find(*it);
+        temp = node->next.find(key);
         if (temp == node->next.end()){
             newNode = newTrieNode();
             newNode->ts = 0xFFFFFFFF;
             newNode->next.clear();
-            node->next[*it] = newNode;
+            node->next[key] = newNode;
             node = newNode;
         }
         else
             node = temp->second;
     }
     node->cnt++;
-    node->ts = 1;
+    node->ts = 0;
 }
 
-void delNgram(TrieNode *node, std::string const& ngram){
+void delNgram(TrieNode *node, const char *ngram){
     TrieMap::iterator temp;
     TrieNode *next;
-    std::string::const_iterator it;
+    const char *it;
 
-    if (ngram.begin() == ngram.end()){
+    if (*ngram == 0){
         node->cnt--;
         node->ts = 0xFFFFFFFF;
         return;
     }
     
-    for (it = ngram.begin(); it != ngram.end(); it++){
+    for (it = ngram; *it; ){
         node->cnt--;
-        assert(node->cnt > 0);
-        temp = node->next.find(*it);
-        assert(temp != node->next.end());
+        mbyte_t key = 0;
+        for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
+            key += ((mbyte_t)(*it) << (i*8));
+        temp = node->next.find(key);
         next = temp->second;
         if (next->cnt == 1){
             node->next.erase(temp);
@@ -61,12 +64,15 @@ void delNgram(TrieNode *node, std::string const& ngram){
         }
         node = next;
     }
-    if (it == ngram.end()){
+    if (!(*it)){
         node->cnt--;
         node->ts = 0xFFFFFFFF;
         return;
     }
-    for (++it; it != ngram.end(); it++){
+    for (++it; *it; ){
+        mbyte_t key = 0;
+        for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
+            key += ((mbyte_t)(*it) << (i*8));
         next = node->next.begin()->second;
         free(node);
         node = next;
@@ -78,17 +84,26 @@ void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, 
     std::string buf;
     TrieMap::iterator temp;
     unsigned int node_ts;
-    for (const char* it = query; *it != 0; it++){
-        node_ts = node->ts;
-        while (node_ts < my_ts && *it == ' '){
-            if (__sync_bool_compare_and_swap(&node->ts, node_ts, my_ts)){
-                cands->emplace_back(make_pair(buf, node));
-                break;
+    for (const char* it = query; *it; ){
+        mbyte_t key = 0;
+        for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++){
+            key += ((*it) << (i*8));
+            buf += *it;
+            if (*(it+1) == ' '){
+                temp = node->next.find(key);
+                if (temp != node->next.end()){
+                    node_ts = temp->second->ts;
+                    while (node_ts < my_ts){
+                        if (__sync_bool_compare_and_swap(&temp->second->ts, node_ts, my_ts)){
+                            cands->emplace_back(make_pair(buf, temp->second));
+                            break;
+                        }
+                        node_ts = temp->second->ts;
+                    }
+                }
             }
-            node_ts = node->ts;
         }
-        buf += *it;
-        temp = node->next.find(*it);
+        temp = node->next.find(key);
         if (temp == node->next.end())
             return;
         node = temp->second;
@@ -101,5 +116,4 @@ void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, 
         }
         node_ts = node->ts;
     }
-    return;
 }

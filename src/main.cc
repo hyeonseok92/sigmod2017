@@ -9,7 +9,7 @@
 #include "thread_struct.h"
 
 #define NUM_THREAD 40
-#define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
+#define my_hash(x) (((mbyte_t)(x))%NUM_THREAD)
 
 #define USE_YIELD
 
@@ -41,7 +41,6 @@ void *thread_main(void *arg){
     int tid = myqueue->tid;
     std::vector<cand_t> *my_res = &res[tid];
     Operation *op;
-    char first_ch;
     while(1){
         while(myqueue->head == myqueue->tail){
             if (global_flag == FLAG_NONE){
@@ -72,7 +71,16 @@ void *thread_main(void *arg){
                         while(c != end && *(c-1) != ' ') c++;
                     if (c == end)
                         break;
-                    while(finished[my_hash(*c)] != ts)
+                    mbyte_t key = 0;
+                    const char *d = c;
+                    for (unsigned int i = 0; i < MBYTE_SIZE && *d; i++, d++){
+                        key += ((*d) << (i*8));
+                        if (*(d+1) == ' ' || *(d+1) == 0){
+                            while(finished[my_hash(key)] != ts)
+                                my_yield();
+                        }
+                    }
+                    while(finished[my_hash(key)] != ts)
                         my_yield();
                     queryNgram(my_res, MY_TS(tid), trie, c);
                 }
@@ -85,20 +93,22 @@ void *thread_main(void *arg){
             }
         }
         op = &(myqueue->operations[myqueue->head++]);
-        first_ch = *(op->str.begin());
-        op->str.erase(op->str.begin());
+        mbyte_t key = 0;
+        const char *it = &(*op->str.begin());
+        for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
+            key += ((mbyte_t)(*it) << (i*8));
         if (op->cmd == 'A'){
-            TrieNode *node = trie->next[first_ch];
+            TrieNode *node = trie->next[key];
             if (!node){
                 node = newTrieNode();
                 node->ts = 0xFFFFFFFF;
                 node->next.clear();
-                trie->next[first_ch] = node;
+                trie->next[key] = node;
             }
-            addNgram(node, op->str);
+            addNgram(node, it);
         }
         else
-            delNgram(trie->next[first_ch], op->str);
+            delNgram(trie->next[key], it);
     }
     pthread_exit((void*)NULL);
 }
@@ -123,7 +133,7 @@ void input(){
             break;
         }
         else{
-            addNgram(trie, buf);
+            addNgram(trie, buf.c_str());
         }
     }
 }
@@ -146,10 +156,14 @@ void workload(){
         std::getline(std::cin, buf);
         if (cmd.compare("A") == 0){
             buf.erase(buf.begin());
-            char first_ch = *buf.begin();
-            if (trie->next.find(first_ch) == trie->next.end())
-                trie->next[first_ch] = NULL;
-            ThrArg *worker = &args[my_hash(first_ch)];
+
+            mbyte_t key = 0;
+            std::string::const_iterator it = buf.begin();
+            for (unsigned int i = 0; i < MBYTE_SIZE && it != buf.end(); i++, it++)
+                key += ((*it) << (i*8));
+            if (trie->next.find(key) == trie->next.end())
+                trie->next[key] = NULL;
+            ThrArg *worker = &args[my_hash(key)];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;
             __sync_synchronize(); //Prevent Code Relocation
@@ -157,7 +171,11 @@ void workload(){
         }
         else if (cmd.compare("D") == 0){
             buf.erase(buf.begin());
-            ThrArg *worker = &args[my_hash(*buf.begin())];
+            mbyte_t key = 0;
+            std::string::const_iterator it = buf.begin();
+            for (unsigned int i = 0; i < MBYTE_SIZE && it != buf.end(); i++, it++)
+                key += ((*it) << (i*8));
+            ThrArg *worker = &args[my_hash(key)];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;
             __sync_synchronize(); //Prevent Code Relocation
