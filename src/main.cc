@@ -8,6 +8,9 @@
 #include "trie.h"
 #include "thread_struct.h"
 
+//#define DBG_TS
+//#define DBG_LOG
+
 #define NUM_THREAD 40
 #define my_hash(x) (((mbyte_t)(x))%NUM_THREAD)
 
@@ -74,7 +77,7 @@ void *thread_main(void *arg){
                     mbyte_t key = 0;
                     const char *d = c;
                     for (unsigned int i = 0; i < MBYTE_SIZE && *d; i++, d++){
-                        key += ((*d) << (i*8));
+                        key += ((mbyte_t)(*d) << (i*8));
                         if (*(d+1) == ' ' || *(d+1) == 0){
                             while(finished[my_hash(key)] != ts)
                                 my_yield();
@@ -160,7 +163,7 @@ void workload(){
             mbyte_t key = 0;
             std::string::const_iterator it = buf.begin();
             for (unsigned int i = 0; i < MBYTE_SIZE && it != buf.end(); i++, it++)
-                key += ((*it) << (i*8));
+                key += ((mbyte_t)(*it) << (i*8));
             if (trie->next.find(key) == trie->next.end())
                 trie->next[key] = NULL;
             ThrArg *worker = &args[my_hash(key)];
@@ -174,7 +177,7 @@ void workload(){
             mbyte_t key = 0;
             std::string::const_iterator it = buf.begin();
             for (unsigned int i = 0; i < MBYTE_SIZE && it != buf.end(); i++, it++)
-                key += ((*it) << (i*8));
+                key += ((mbyte_t)(*it) << (i*8));
             ThrArg *worker = &args[my_hash(key)];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;

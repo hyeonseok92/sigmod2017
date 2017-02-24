@@ -87,7 +87,7 @@ void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, 
     for (const char* it = query; *it; ){
         mbyte_t key = 0;
         for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++){
-            key += ((*it) << (i*8));
+            key += ((mbyte_t)(*it) << (i*8));
             buf += *it;
             if (*(it+1) == ' '){
                 temp = node->next.find(key);
