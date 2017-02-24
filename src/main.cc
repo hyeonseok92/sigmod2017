@@ -30,11 +30,11 @@ TrieNode *trie;
 pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
 
-unsigned int ts = 1;
+unsigned int ts;
 
 int global_flag;
+unsigned int started[NUM_THREAD];
 unsigned int finished[NUM_THREAD];
-int sync_val;
 std::vector<cand_t> res[NUM_THREAD];
 const char *query_str;
 int size_query;
@@ -50,10 +50,11 @@ void *thread_main(void *arg){
                 my_yield();
                 continue;
             }
-            else if (global_flag == FLAG_END){
-                pthread_exit((void*)NULL);
-            }
-            else{
+            else if (global_flag == FLAG_QUERY){
+                if (started[tid] == ts){
+                    my_yield();
+                    continue;
+                }
                 __sync_synchronize(); //Load Memory barrier
                 if (myqueue->head != myqueue->tail) break;
                 __sync_synchronize(); //Prevent Code Relocation
@@ -64,7 +65,7 @@ void *thread_main(void *arg){
                     end = query_str + size_query;
                 }
                 myqueue->head = myqueue->tail = 0;
-                finished[tid] = ts;
+                started[tid] = ts;
                 my_res->clear();
                 __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){
@@ -79,29 +80,27 @@ void *thread_main(void *arg){
                     for (unsigned int i = 0; i < MBYTE_SIZE && *d; i++, d++){
                         key += ((mbyte_t)(*d) << (i*8));
                         if (*(d+1) == ' ' || *(d+1) == 0){
-                            while(finished[my_hash(key)] != ts)
+                            while(started[my_hash(key)] != ts)
                                 my_yield();
                         }
                     }
-                    while(finished[my_hash(key)] != ts)
+                    while(started[my_hash(*c)] != ts)
                         my_yield();
                     queryNgram(my_res, MY_TS(tid), trie, c);
                 }
                 __sync_synchronize(); //Prevent Code Relocation
-                __sync_fetch_and_add(&sync_val, 1);
-                __sync_synchronize(); //Prevent Code Relocation
-                while(global_flag == FLAG_QUERY && finished[tid] == ts){
-                    my_yield();
-                }
+                finished[tid] = ts;
             }
+            else
+                pthread_exit((void*)NULL);
         }
         op = &(myqueue->operations[myqueue->head++]);
         mbyte_t key = 0;
         const char *it = &(*op->str.begin());
         for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
             key += ((mbyte_t)(*it) << (i*8));
+        TrieNode *node = trie->next[key];
         if (op->cmd == 'A'){
-            TrieNode *node = trie->next[key];
             if (!node){
                 node = newTrieNode();
                 node->ts = 0xFFFFFFFF;
@@ -111,7 +110,7 @@ void *thread_main(void *arg){
             addNgram(node, it);
         }
         else
-            delNgram(trie->next[key], it);
+            delNgram(node, it);
     }
     pthread_exit((void*)NULL);
 }
@@ -157,27 +156,14 @@ void workload(){
             }
         }
         std::getline(std::cin, buf);
-        if (cmd.compare("A") == 0){
+        if (cmd.compare("Q") != 0){
             buf.erase(buf.begin());
-
             mbyte_t key = 0;
             std::string::const_iterator it = buf.begin();
             for (unsigned int i = 0; i < MBYTE_SIZE && it != buf.end(); i++, it++)
                 key += ((mbyte_t)(*it) << (i*8));
             if (trie->next.find(key) == trie->next.end())
                 trie->next[key] = NULL;
-            ThrArg *worker = &args[my_hash(key)];
-            worker->operations[worker->tail].cmd = *(cmd.begin());
-            worker->operations[worker->tail].str = buf;
-            __sync_synchronize(); //Prevent Code Relocation
-            worker->tail++;
-        }
-        else if (cmd.compare("D") == 0){
-            buf.erase(buf.begin());
-            mbyte_t key = 0;
-            std::string::const_iterator it = buf.begin();
-            for (unsigned int i = 0; i < MBYTE_SIZE && it != buf.end(); i++, it++)
-                key += ((mbyte_t)(*it) << (i*8));
             ThrArg *worker = &args[my_hash(key)];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;
@@ -191,14 +177,12 @@ void workload(){
 #endif
             query_str = buf.c_str();
             size_query = buf.size();
-            sync_val = 0;
             __sync_synchronize(); //Prevent Code Relocation
             global_flag = FLAG_QUERY;
             __sync_synchronize(); //Prevent Code Relocation
-            while(sync_val != NUM_THREAD) my_yield();
-            __sync_synchronize(); //Prevent Code Relocation
             bool print_answer = false;
             for (int i = 0; i < NUM_THREAD; i++){
+                while(finished[i] != ts) my_yield();
                 unsigned int my_ts = MY_TS(i);
                 for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
                     if (it->second->ts == my_ts){
