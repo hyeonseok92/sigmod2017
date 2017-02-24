@@ -4,8 +4,8 @@
 #include <vector>
 
 //typedef unsigned long long int mbyte_t;
-//typedef unsigned int mbyte_t;
-typedef unsigned char mbyte_t;
+typedef unsigned short mbyte_t;
+//typedef unsigned char mbyte_t;
 #define MBYTE_SIZE sizeof(mbyte_t)
 
 struct TrieNode;

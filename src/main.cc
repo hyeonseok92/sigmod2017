@@ -84,7 +84,7 @@ void *thread_main(void *arg){
                                 my_yield();
                         }
                     }
-                    while(started[my_hash(*c)] != ts)
+                    while(started[my_hash(key)] != ts)
                         my_yield();
                     queryNgram(my_res, MY_TS(tid), trie, c);
                 }
