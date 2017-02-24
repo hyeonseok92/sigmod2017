@@ -193,8 +193,6 @@ void workload(){
 }
 
 int main(int argc, char *argv[]){
-//    freopen("input3.txt","r",stdin);
-//    freopen("output.txt","w",stdout);
     std::ios::sync_with_stdio(false);
     initTrie(&trie);
 #ifdef DBG_LOG
