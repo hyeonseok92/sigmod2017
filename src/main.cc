@@ -87,8 +87,16 @@ void *thread_main(void *arg){
         op = &(myqueue->operations[myqueue->head++]);
         first_ch = *(op->str.begin());
         op->str.erase(op->str.begin());
-        if (op->cmd == 'A')
-            addNgram(trie->next[first_ch], op->str);
+        if (op->cmd == 'A'){
+            TrieNode *node = trie->next[first_ch];
+            if (!node){
+                node = newTrieNode();
+                node->ts = 0xFFFFFFFF;
+                node->next.clear();
+                trie->next[first_ch] = node;
+            }
+            addNgram(node, op->str);
+        }
         else
             delNgram(trie->next[first_ch], op->str);
     }
@@ -139,12 +147,8 @@ void workload(){
         if (cmd.compare("A") == 0){
             buf.erase(buf.begin());
             char first_ch = *buf.begin();
-            if (trie->next.find(first_ch) == trie->next.end()){
-                TrieNode *newNode = newTrieNode();
-                newNode->ts = 0xFFFFFFFF;
-                newNode->next.clear();
-                trie->next[first_ch] = newNode;
-            }
+            if (trie->next.find(first_ch) == trie->next.end())
+                trie->next[first_ch] = NULL;
             ThrArg *worker = &args[my_hash(first_ch)];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;
