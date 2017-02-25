@@ -15,19 +15,22 @@ struct TrieNode{
 
 typedef std::pair<std::string, TrieNode*> cand_t;
 #define MY_TS(tid) (((ts) << 6) | (NUM_THREAD-tid))
-/*
+
+#define USE_CALLOC
+
+#ifdef USE_CALLOC
 #define newTrieNode(x) do{\
     (x) = (TrieNode*) calloc(1, sizeof(TrieNode));\
     (x)->next.clear();\
 }while(0)
 #define freeTrieNode(x) free(x)
-*/
-
+#else
 #define newTrieNode(x) do{\
     (x) = new TrieNode;\
     (x)->cnt = 0;\
 }while(0)
 #define freeTrieNode(x) delete (x)
+#endif
 
 void initTrie(TrieNode** node);
 void destroyTrie(TrieNode* node);
