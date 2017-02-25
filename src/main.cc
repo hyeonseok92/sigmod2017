@@ -11,12 +11,12 @@
 #define NUM_THREAD 39
 #define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
-#define USE_YIELD
+#define USE_SYNC
 
-#ifdef USE_YIELD
-#define my_yield() pthread_yield()
+#ifdef USE_SYNC
+#define my_yield() __sync_synchronize()
 #else
-#define my_yield() usleep(1)
+#define my_yield() pthread_yield()
 #endif
 
 #define FLAG_NONE 0
