@@ -30,8 +30,8 @@ ThrArg args[NUM_THREAD];
 unsigned int ts;
 
 int global_flag;
-unsigned int started[NUM_THREAD];
-unsigned int finished[NUM_THREAD];
+unsigned int started[NUM_THREAD][16];
+unsigned int finished[NUM_THREAD][16];
 std::vector<cand_t> res[NUM_THREAD];
 const char *query_str;
 int size_query;
@@ -49,7 +49,7 @@ void *thread_main(void *arg){
                 continue;
             }
             else if (global_flag == FLAG_QUERY){
-                if (started[tid] == ts){
+                if (started[tid][0] == ts){
                     my_yield();
                     continue;
                 }
@@ -62,7 +62,7 @@ void *thread_main(void *arg){
                 if (end-query_str > size_query)
                     end = query_str + size_query;
                 myqueue->head = myqueue->tail = 0;
-                started[tid] = ts;
+                started[tid][0] = ts;
                 my_res->clear();
                 __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){
@@ -73,12 +73,12 @@ void *thread_main(void *arg){
                     if (c == end)
                         break;
                     int hval = my_hash(*c);
-                    while(started[hval] != ts)
+                    while(started[hval][0] != ts)
                         my_yield();
                     queryNgram(my_res, MY_TS(tid), trie[hval], c);
                 }
                 __sync_synchronize(); //Prevent Code Relocation
-                finished[tid] = ts;
+                finished[tid][0] = ts;
             }
             else
                 pthread_exit((void*)NULL);
@@ -150,7 +150,7 @@ void workload(){
             __sync_synchronize(); //Prevent Code Relocation
             bool print_answer = false;
             for (int i = 0; i < NUM_THREAD; i++){
-                while(finished[i] != ts) my_yield();
+                while(finished[i][0] != ts) my_yield();
                 unsigned int my_ts = MY_TS(i);
                 for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
                     if (it->second->ts == my_ts){
