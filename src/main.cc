@@ -9,6 +9,7 @@
 #include "thread_struct.h"
 
 #define NUM_THREAD 39
+#define RES_RESERVE 128
 #define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
 //#define TRACE_WORK
@@ -18,7 +19,7 @@
 #ifdef USE_YIELD
 #define my_yield() pthread_yield()
 #else
-#define my_yield() usleep(1)
+#define my_yield()
 #endif
 
 #define FLAG_NONE 0
@@ -37,6 +38,7 @@ unsigned int finished[NUM_THREAD][16];
 std::vector<cand_t> res[NUM_THREAD];
 const char *query_str;
 int size_query;
+int sync_val;
 
 void *thread_main(void *arg){
 #ifdef TRACE_WORK
@@ -47,6 +49,9 @@ void *thread_main(void *arg){
     TrieNode *my_trie = trie[tid];
     std::vector<cand_t> *my_res = &res[tid];
     Operation *op;
+    my_res->reserve(RES_RESERVE);
+    __sync_synchronize();
+    __sync_fetch_and_add(&sync_val, 1);
     while(1){
         while(myqueue->head == myqueue->tail){
             if (global_flag == FLAG_NONE){
@@ -129,6 +134,8 @@ void input(){
 void workload(){
     std::string cmd;
     std::string buf;
+    while(sync_val != NUM_THREAD)
+        my_yield();
     printf("R\n");
     fflush(stdout);
     while(!std::cin.eof()){
