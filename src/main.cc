@@ -10,6 +10,8 @@
 
 #define NUM_THREAD 39
 #define RES_RESERVE 128
+#define CMD_RESERVE 4
+#define BUF_RESERVE 1024*1024
 #define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
 //#define TRACE_WORK
@@ -134,6 +136,8 @@ void input(){
 void workload(){
     std::string cmd;
     std::string buf;
+    cmd.reserve(CMD_RESERVE);
+    buf.reserve(BUF_RESERVE);
     while(sync_val != NUM_THREAD)
         my_yield();
     printf("R\n");
