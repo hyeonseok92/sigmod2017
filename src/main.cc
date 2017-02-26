@@ -11,6 +11,8 @@
 #define NUM_THREAD 39
 #define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
+//#define TRACE_WORK
+
 #define USE_YIELD
 
 #ifdef USE_YIELD
@@ -37,6 +39,9 @@ const char *query_str;
 int size_query;
 
 void *thread_main(void *arg){
+#ifdef TRACE_WORK
+    int cntwork = 0;
+#endif
     ThrArg *myqueue = (ThrArg*)arg;
     int tid = myqueue->tid;
     TrieNode *my_trie = trie[tid];
@@ -80,9 +85,16 @@ void *thread_main(void *arg){
                 __sync_synchronize(); //Prevent Code Relocation
                 finished[tid][0] = ts;
             }
-            else
+            else{
+#ifdef TRACE_WORK
+                fprintf(stderr, "%2d : %5d\n", tid,cntwork);
+#endif
                 pthread_exit((void*)NULL);
+            }
         }
+#ifdef TRACE_WORK
+        cntwork++;
+#endif
         op = &(myqueue->operations[myqueue->head++]);
         if (op->cmd == 'A')
             addNgram(my_trie, op->str);
