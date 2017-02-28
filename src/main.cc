@@ -8,7 +8,7 @@
 #include "trie.h"
 #include "thread_struct.h"
 
-#define NUM_THREAD 40
+#define NUM_THREAD 39
 #define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
 #define USE_YIELD
@@ -21,9 +21,9 @@
 
 #define FLAG_NONE 0
 #define FLAG_QUERY 1
-#define FLAG_END 3
+#define FLAG_END 2
 
-TrieNode *trie;
+TrieNode *trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
 
@@ -39,9 +39,9 @@ int size_query;
 void *thread_main(void *arg){
     ThrArg *myqueue = (ThrArg*)arg;
     int tid = myqueue->tid;
+    TrieNode *my_trie = trie[tid];
     std::vector<cand_t> *my_res = &res[tid];
     Operation *op;
-    char first_ch;
     while(1){
         while(myqueue->head == myqueue->tail){
             if (global_flag == FLAG_NONE){
@@ -59,9 +59,8 @@ void *thread_main(void *arg){
                 int size = 1 + (size_query-1) / NUM_THREAD;
                 const char *start = query_str + size * tid;
                 const char *end = start + size;
-                if (end-query_str > size_query){
+                if (end-query_str > size_query)
                     end = query_str + size_query;
-                }
                 myqueue->head = myqueue->tail = 0;
                 started[tid] = ts;
                 my_res->clear();
@@ -73,9 +72,10 @@ void *thread_main(void *arg){
                         while(c != end && *(c-1) != ' ') c++;
                     if (c == end)
                         break;
-                    while(started[my_hash(*c)] != ts)
+                    int hval = my_hash(*c);
+                    while(started[hval] != ts)
                         my_yield();
-                    queryNgram(my_res, MY_TS(tid), trie, c);
+                    queryNgram(my_res, MY_TS(tid), trie[hval], c);
                 }
                 __sync_synchronize(); //Prevent Code Relocation
                 finished[tid] = ts;
@@ -84,20 +84,10 @@ void *thread_main(void *arg){
                 pthread_exit((void*)NULL);
         }
         op = &(myqueue->operations[myqueue->head++]);
-        first_ch = *(op->str.begin());
-        op->str.erase(op->str.begin());
-        TrieNode *node = trie->next[first_ch];
-        if (op->cmd == 'A'){
-            if (!node){
-                node = newTrieNode();
-                node->ts = 0xFFFFFFFF;
-                node->next.clear();
-                trie->next[first_ch] = node;
-            }
-            addNgram(node, op->str);
-        }
+        if (op->cmd == 'A')
+            addNgram(my_trie, op->str);
         else
-            delNgram(node, op->str);
+            delNgram(my_trie, op->str);
     }
     pthread_exit((void*)NULL);
 }
@@ -109,21 +99,18 @@ void initThread(){
     }
 }
 void destroyThread(){
-    for (int i = 0; i < NUM_THREAD; i++){
+    for (int i = 0; i < NUM_THREAD; i++)
         pthread_join(threads[i], NULL);
-    }
 }
 
 void input(){
     std::string buf;
     while(1){
         std::getline(std::cin, buf);
-        if (buf.compare("S") == 0){
+        if (buf.compare("S") == 0)
             break;
-        }
-        else{
-            addNgram(trie, buf);
-        }
+        else
+            addNgram(trie[my_hash(*buf.begin())], buf);
     }
 }
 
@@ -145,10 +132,7 @@ void workload(){
         std::getline(std::cin, buf);
         if (cmd.compare("Q") != 0){
             buf.erase(buf.begin());
-            char first_ch = *buf.begin();
-            if (cmd[0] == 'A' && trie->next.find(first_ch) == trie->next.end())
-                trie->next[first_ch] = NULL;
-            ThrArg *worker = &args[my_hash(first_ch)];
+            ThrArg *worker = &args[my_hash(*buf.begin())];
             worker->operations[worker->tail].cmd = *(cmd.begin());
             worker->operations[worker->tail].str = buf;
             __sync_synchronize(); //Prevent Code Relocation
@@ -187,7 +171,8 @@ void workload(){
 
 int main(int argc, char *argv[]){
     std::ios::sync_with_stdio(false);
-    initTrie(&trie);
+    for (int i = 0; i < NUM_THREAD; i++)
+        initTrie(&trie[i]);
 #ifdef DBG_LOG
     std::cerr<<"initTree done" << std::endl;
 #endif
@@ -207,7 +192,8 @@ int main(int argc, char *argv[]){
 #ifdef DBG_LOG
     std::cerr<<"destroyThread done" << std::endl;
 #endif
-    destroyTrie(trie);
+    for (int i = 0; i < NUM_THREAD; i++)
+        destroyTrie(trie[i]);
 #ifdef DBG_LOG
     std::cerr<<"destroyTrie done" << std::endl;
 #endif
