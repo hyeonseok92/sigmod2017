@@ -8,7 +8,7 @@
 #include "trie.h"
 #include "thread_struct.h"
 
-#define NUM_THREAD 40
+#define NUM_THREAD 39
 #define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
 #define USE_YIELD
@@ -21,7 +21,7 @@
 
 #define FLAG_NONE 0
 #define FLAG_QUERY 1
-#define FLAG_END 3
+#define FLAG_END 2
 
 TrieNode *trie;
 pthread_t threads[NUM_THREAD];
@@ -122,12 +122,10 @@ void input(){
     std::string buf;
     while(1){
         std::getline(std::cin, buf);
-        if (buf.compare("S") == 0){
+        if (buf.compare("S") == 0)
             break;
-        }
-        else{
+        else
             addNgram(trie, buf);
-        }
     }
 }
 
