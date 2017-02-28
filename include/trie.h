@@ -1,10 +1,12 @@
 #pragma once
 #include <iostream>
 #include <map>
+//#include <unordered_map>
 #include <vector>
 
 struct TrieNode;
 typedef std::map<char, TrieNode*> TrieMap;
+//typedef std::unordered_map<char, TrieNode*> TrieMap;
 struct TrieNode{
     unsigned int ts;
     int cnt;
@@ -13,7 +15,19 @@ struct TrieNode{
 
 typedef std::pair<std::string, TrieNode*> cand_t;
 #define MY_TS(tid) (((ts) << 6) | (NUM_THREAD-tid))
-#define newTrieNode() ((TrieNode*) calloc(1, sizeof(TrieNode)))
+/*
+#define newTrieNode(x) do{\
+    (x) = (TrieNode*) calloc(1, sizeof(TrieNode));\
+    (x)->next.clear();\
+}while(0)
+#define freeTrieNode(x) free(x)
+*/
+
+#define newTrieNode(x) do{\
+    (x) = new TrieNode;\
+    (x)->cnt = 0;\
+}while(0)
+#define freeTrieNode(x) delete (x)
 
 void initTrie(TrieNode** node);
 void destroyTrie(TrieNode* node);

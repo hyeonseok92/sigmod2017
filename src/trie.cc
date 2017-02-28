@@ -5,15 +5,14 @@
 #include <jemalloc/jemalloc.h>
 
 void initTrie(TrieNode** node){
-    *node = (TrieNode*) calloc(1, sizeof(TrieNode));
-    (*node)->next.clear();
+    newTrieNode(*node);
 }
 
 void destroyTrie(TrieNode* node){
     for (TrieMap::iterator it = node->next.begin(); it !=  node->next.end(); it++){
         destroyTrie(it->second);
     }
-    free(node);
+    freeTrieNode(node);
 }
 
 void addNgram(TrieNode* node, std::string const& ngram){
@@ -24,9 +23,8 @@ void addNgram(TrieNode* node, std::string const& ngram){
         node->cnt++;
         temp = node->next.find(*it);
         if (temp == node->next.end()){
-            newNode = newTrieNode();
+            newTrieNode(newNode);
             newNode->ts = 0xFFFFFFFF;
-            newNode->next.clear();
             node->next[*it] = newNode;
             node = newNode;
         }
@@ -68,10 +66,10 @@ void delNgram(TrieNode *node, std::string const& ngram){
     }
     for (++it; it != ngram.end(); it++){
         next = node->next.begin()->second;
-        free(node);
+        freeTrieNode(node);
         node = next;
     }
-    free(node);
+    freeTrieNode(node);
 }
 
 void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
