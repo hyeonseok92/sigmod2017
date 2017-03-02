@@ -5,10 +5,14 @@
 #include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
+#define DBG_TIME    1
+#ifdef DBG_TIME
+#include <time.h>
+#endif
 #include "trie.h"
 #include "thread_struct.h"
 
-#define NUM_THREAD 39
+#define NUM_THREAD 4
 #define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
 #define USE_YIELD
@@ -154,16 +158,26 @@ void workload(){
                 unsigned int my_ts = MY_TS(i);
                 for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
                     if (it->second->ts == my_ts){
-                        if (print_answer)
+                        if (print_answer) {
+#ifndef DBG_TIME
                             std::cout << "|";
+#endif
+                        }
                         print_answer = true;
+#ifndef DBG_TIME
                         std::cout << it->first;
+#endif
                     }
                 }
             }
-            if (!print_answer)
+            if (!print_answer) {
+#ifndef DBG_TIME
                 std::cout << -1;
+#endif
+            }
+#ifndef DBG_TIME 
             std::cout << std::endl;
+#endif
             global_flag = FLAG_NONE;
         }
     }
@@ -184,7 +198,15 @@ int main(int argc, char *argv[]){
 #ifdef DBG_LOG
     std::cerr<<"input done" << std::endl;
 #endif
+#ifdef DBG_TIME
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+#endif
     workload();
+#ifdef DBG_TIME
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    printf("%llu\n", ((end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec))/1000000);
+#endif
 #ifdef DBG_LOG
     std::cerr<<"workload done" << std::endl;
 #endif

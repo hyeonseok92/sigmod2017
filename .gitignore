@@ -7,3 +7,9 @@ bin/*
 
 # Ignore Mac specific files
 .DS_Store
+
+# Ignore cscope files
+cscope.*
+
+# Ignore test files
+*.all

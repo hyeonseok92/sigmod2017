@@ -21,6 +21,7 @@ typedef std::pair<std::string, TrieNode*> cand_t;
 #ifdef USE_CALLOC
 #define newTrieNode(x) do{\
     (x) = (TrieNode*) calloc(1, sizeof(TrieNode));\
+    (x)->next = std::map<char, TrieNode*>();\
     (x)->next.clear();\
 }while(0)
 #define freeTrieNode(x) free(x)
