@@ -3,20 +3,19 @@
 #include <map>
 //#include <unordered_map>
 #include <vector>
+#include <unordered_set>
+#include "thread_struct.h"
 
 struct TrieNode;
 typedef std::map<char, TrieNode*> TrieMap;
 //typedef std::unordered_map<char, TrieNode*> TrieMap;
 struct TrieNode{
-    unsigned int ts;
-    int cnt;
+    std::vector<unsigned int> *hist;
+    std::unordered_set<unsigned int> *ts;
     TrieMap next;
 };
 
-typedef std::pair<std::string, TrieNode*> cand_t;
-#define MY_TS(tid) (((ts) << 6) | (NUM_THREAD-tid))
-
-#define USE_CALLOC
+//#define USE_CALLOC
 
 #ifdef USE_CALLOC
 #define newTrieNode(x) do{\
@@ -24,17 +23,40 @@ typedef std::pair<std::string, TrieNode*> cand_t;
     (x)->next.clear();\
 }while(0)
 #define freeTrieNode(x) free(x)
+
+#define newHist(x) do{\
+    (x) = (std::vector<unsigned int>*) calloc(1, sizeof(std::vector<unsigned int>));\
+    (x)->clear();\
+}while(0)
+#define freeHist(x) free(x)
+
+#define newTs(x) do{\
+    (x) = (std::unordered_set<unsigned int>*) calloc(1, sizeof(std::unordered_set<unsigned int>));\
+    (x)->clear();\
+}while(0)
+#define freeTs(x) free(x)
 #else
 #define newTrieNode(x) do{\
     (x) = new TrieNode;\
-    (x)->cnt = 0;\
+    (x)->hist = 0;\
+    (x)->ts = 0;\
 }while(0)
 #define freeTrieNode(x) delete (x)
+
+#define newHist(x) do{\
+    (x) = new std::vector<unsigned int>;\
+}while(0)
+#define freeHist(x) delete (x)
+
+#define newTs(x) do{\
+    (x) = new std::unordered_set<unsigned int>;\
+}while(0)
+#define freeTs(x) delete (x)
 #endif
 
 void initTrie(TrieNode** node);
 void destroyTrie(TrieNode* node);
 
-void addNgram(TrieNode* node, std::string const &ngram);
-void delNgram(TrieNode* node, std::string const &ngram);
-void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* trie, const char *query);
+void addNgram(TrieNode* node, unsigned int ts, std::string const &ngram);
+void delNgram(TrieNode* node, unsigned int ts, std::string const &ngram);
+void queryNgram(std::vector<cand_t> *cands, unsigned int ts, TrieNode* trie, const char *query);

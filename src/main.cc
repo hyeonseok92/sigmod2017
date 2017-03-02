@@ -8,7 +8,6 @@
 #include "trie.h"
 #include "thread_struct.h"
 
-#define NUM_THREAD 39
 #define RES_RESERVE 128
 #define CMD_RESERVE 4
 #define BUF_RESERVE 1024*1024
@@ -21,99 +20,134 @@
 #ifdef USE_YIELD
 #define my_yield() pthread_yield()
 #else
-#define my_yield()
+#define my_yield() usleep(1)
 #endif
 
-#define FLAG_NONE 0
-#define FLAG_QUERY 1
-#define FLAG_END 2
+#define FLAG_INIT 0
+#define FLAG_INIT_END 1
+#define FLAG_WORK 2
+#define FLAG_WORK_END 3
 
-TrieNode *trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
 
-unsigned int ts;
-
-int global_flag;
-unsigned int started[NUM_THREAD][16];
-unsigned int finished[NUM_THREAD][16];
-std::vector<cand_t> res[NUM_THREAD];
-const char *query_str;
-int size_query;
+int global_flag = FLAG_INIT;
+QueryInfo raw_queries[MAX_BATCH_SIZE];
+int raw_query_tail;
+int raw_query_head;
 int sync_val;
 
 void *thread_main(void *arg){
 #ifdef TRACE_WORK
     int cntwork = 0;
 #endif
+    TrieNode *my_trie;
     ThrArg *myqueue = (ThrArg*)arg;
-    int tid = myqueue->tid;
-    TrieNode *my_trie = trie[tid];
-    std::vector<cand_t> *my_res = &res[tid];
-    Operation *op;
-    my_res->reserve(RES_RESERVE);
-    __sync_synchronize();
-    __sync_fetch_and_add(&sync_val, 1);
+    int modify_head = 0;
+    int query_head = 0;
+    initTrie(&my_trie);
+
+    // Start of Init
     while(1){
-        while(myqueue->head == myqueue->tail){
-            if (global_flag == FLAG_NONE){
+        if (modify_head != myqueue->modify_tail){
+            ModifyOp *op = &(myqueue->modify_ops[modify_head++]);
+            addNgram(my_trie, op->ts, op->str);
+        }
+        else if (global_flag == FLAG_INIT){
+            my_yield();
+            continue;
+        }
+        else{
+//            __sync_synchronize(); //Load Memory barrier
+//            if (modify_head != myqueue->modify_tail)
+//                continue;
+            break;
+        }
+    }
+    __sync_synchronize(); //Prevent Code Relocation
+    myqueue->modify_tail = modify_head = 0;
+    myqueue->query_tail = query_head = 0;
+    __sync_synchronize(); //Prevent Code Relocation
+    __sync_fetch_and_add(&sync_val, 1);
+    while(global_flag != FLAG_WORK)
+        my_yield();
+    __sync_synchronize(); //Prevent Code Relocation
+
+    // Start of Workload
+    while(1){
+        if (modify_head != myqueue->modify_tail){
+#ifdef TRACE_WORK
+            cntwork++;
+#endif
+            ModifyOp *op = &(myqueue->modify_ops[modify_head++]);
+            if (op->cmd == 'A')
+                addNgram(my_trie, op->ts, op->str);
+            else
+                delNgram(my_trie, op->ts, op->str);
+        }
+        else if (query_head != myqueue->query_tail){
+//            __sync_synchronize();//Load Memory barrier
+//            if (modify_head != myqueue->modify_tail)
+//                continue;
+            QueryOp *op = &(myqueue->query_ops[query_head++]); 
+            while(op->ts == 0)
                 my_yield();
-                continue;
-            }
-            else if (global_flag == FLAG_QUERY){
-                if (started[tid][0] == ts){
-                    my_yield();
-                    continue;
-                }
-                __sync_synchronize(); //Load Memory barrier
-                if (myqueue->head != myqueue->tail) break;
-                __sync_synchronize(); //Prevent Code Relocation
-                int size = 1 + (size_query-1) / NUM_THREAD;
-                const char *start = query_str + size * tid;
-                const char *end = start + size;
-                if (end-query_str > size_query)
-                    end = query_str + size_query;
-                myqueue->head = myqueue->tail = 0;
-                started[tid][0] = ts;
-                my_res->clear();
-                __sync_synchronize(); //Prevent Code Relocation
-                for(const char *c = start; c < end; c++){
-                    if (*c == ' ')
-                        c++;
-                    else
-                        while(c != end && *(c-1) != ' ') c++;
-                    if (c == end)
-                        break;
-                    int hval = my_hash(*c);
-                    while(started[hval][0] != ts)
-                        my_yield();
-                    queryNgram(my_res, MY_TS(tid), trie[hval], c);
-                }
-                __sync_synchronize(); //Prevent Code Relocation
-                finished[tid][0] = ts;
+            if (op->start_point != NULL){
+                queryNgram(op->res, op->ts, my_trie, op->start_point);
+                op->ts = 0;//clear for reuse
             }
             else{
-#ifdef TRACE_WORK
-                fprintf(stderr, "%2d : %5d\n", tid,cntwork);
-#endif
-                pthread_exit((void*)NULL);
+                __sync_synchronize();
+                __sync_fetch_and_add(op->is_end, 1);
             }
         }
+        else if (raw_query_head != raw_query_tail){
+            int my_raw_query_head = raw_query_head;
+            if (__sync_bool_compare_and_swap(&raw_query_head, my_raw_query_head, my_raw_query_head+1)){
+                QueryInfo *queryinfo = &raw_queries[my_raw_query_head];
+                for (const char *c = &(*raw_queries[my_raw_query_head].query.begin()); *c != 0;){
+                    c++;
+
+                    unsigned int work_tid = my_hash(*c);
+                    ThrArg *worker = &args[work_tid];
+                    int my_tail = __sync_fetch_and_add(&worker->query_tail,1);
+                    worker->query_ops[my_tail].start_point = c;
+                    worker->query_ops[my_tail].res = &queryinfo->res[work_tid];
+                    __sync_synchronize();
+                    //Signal to worker that this op is available
+                    worker->query_ops[my_tail].ts = queryinfo->ts;
+
+                    while(*c != ' ' && *c != 0) c++;
+                }
+                for (int i = 0; i < NUM_THREAD; i++){
+                    ThrArg *worker = &args[i];
+                    int my_tail = __sync_fetch_and_add(&worker->query_tail,1);
+                    worker->query_ops[my_tail].start_point = NULL;
+                    worker->query_ops[my_tail].is_end = &(queryinfo->finished);
+                    __sync_synchronize();
+                    //Signal to worker that this op is available
+                    worker->query_ops[my_tail].ts = queryinfo->ts;
+                }
+                continue;
+            }
+        }
+        else if (global_flag == FLAG_WORK){
+            my_yield();
+            continue;
+        }
+        else{
 #ifdef TRACE_WORK
-        cntwork++;
+            fprintf(stderr, "%2d : %5d\n", tid,cntwork);
 #endif
-        op = &(myqueue->operations[myqueue->head++]);
-        if (op->cmd == 'A')
-            addNgram(my_trie, op->str);
-        else
-            delNgram(my_trie, op->str);
+            break;
+        }
     }
+    destroyTrie(my_trie);
     pthread_exit((void*)NULL);
 }
 
 void initThread(){
     for (int i = 0; i < NUM_THREAD; i++){
-        args[i].tid = i;
         pthread_create(&threads[i], NULL, &thread_main, (void *)&args[i]);
     }
 }
@@ -128,77 +162,112 @@ void input(){
         std::getline(std::cin, buf);
         if (buf.compare("S") == 0)
             break;
-        else
-            addNgram(trie[my_hash(*buf.begin())], buf);
+        else{
+            ThrArg *worker = &args[my_hash(*buf.begin())];
+            worker->modify_ops[worker->modify_tail].cmd = 'A';
+            worker->modify_ops[worker->modify_tail].str = buf;
+            worker->modify_ops[worker->modify_tail].ts = 1;
+            __sync_synchronize(); //Prevent Code Relocation
+            worker->modify_tail++;
+        }
+    }
+}
+
+void printQuery(){
+    unsigned int it[NUM_THREAD];
+    int tot;
+    for (int i = 0; i < raw_query_tail; i++){
+        QueryInfo *queryinfo = &raw_queries[i];
+        while(queryinfo->finished != NUM_THREAD)
+            my_yield();
+        tot = 0;
+        for (int j = 0; j < NUM_THREAD; j++){
+            it[j] = 0;
+            tot += queryinfo->res[j].size();
+        }
+        if (tot == 0){
+            printf("-1\n");
+        }
+        else{
+            const char *c = (const char *)-1;
+            int size;
+            int tid = 0;
+            for (int k = 0; k < NUM_THREAD; k++){
+                if (it[k] < queryinfo->res[k].size() && queryinfo->res[k][it[k]].first < c){
+                    c = queryinfo->res[k][it[k]].first;
+                    size = queryinfo->res[k][it[k]].second;
+                    tid = k;
+                }
+            }
+            printf("%.*s", size, c);
+            it[tid]++;
+            for (int j = 1; j < tot; j++){
+                c = (const char *)-1;
+                for (int k = 0; k < NUM_THREAD; k++){
+                    if (it[k] < queryinfo->res[k].size() && queryinfo->res[k][it[k]].first < c){
+                        c = queryinfo->res[k][it[k]].first;
+                        size = queryinfo->res[k][it[k]].second;
+                        tid = k;
+                    }
+                }
+                printf("|%.*s", size, c);
+                it[tid]++;
+            }
+            printf("\n");
+        }
     }
 }
 
 void workload(){
+    unsigned int ts = 1;
     std::string cmd;
     std::string buf;
     cmd.reserve(CMD_RESERVE);
     buf.reserve(BUF_RESERVE);
+    global_flag = FLAG_INIT_END;
     while(sync_val != NUM_THREAD)
         my_yield();
+    global_flag = FLAG_WORK;
     printf("R\n");
     fflush(stdout);
     while(!std::cin.eof()){
         std::cin >> cmd;
         if (cmd.compare("F") == 0){
+            printQuery();
+            raw_query_head = raw_query_tail = 0;
             fflush(stdout);
             std::cin >> cmd;
             if (cmd.compare("F") == 0){
-                global_flag = FLAG_END;
+                global_flag = FLAG_WORK_END;
                 break;
             }
         }
-        std::getline(std::cin, buf);
         if (cmd.compare("Q") != 0){
+            std::getline(std::cin, buf);
             buf.erase(buf.begin());
             ThrArg *worker = &args[my_hash(*buf.begin())];
-            worker->operations[worker->tail].cmd = *(cmd.begin());
-            worker->operations[worker->tail].str = buf;
+            worker->modify_ops[worker->modify_tail].cmd = *(cmd.begin());
+            worker->modify_ops[worker->modify_tail].str = buf;
+            worker->modify_ops[worker->modify_tail].ts = ts;
             __sync_synchronize(); //Prevent Code Relocation
-            worker->tail++;
+            worker->modify_tail++;
         }
         else{
             ts++;
 #ifdef DBG_TS
             std::cout << ts << " ";
 #endif
-            query_str = buf.c_str();
-            size_query = buf.size();
-            __sync_synchronize(); //Prevent Code Relocation
-            global_flag = FLAG_QUERY;
-            __sync_synchronize(); //Prevent Code Relocation
-            bool print_answer = false;
-            for (int i = 0; i < NUM_THREAD; i++){
-                while(finished[i][0] != ts) my_yield();
-                unsigned int my_ts = MY_TS(i);
-                for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
-                    if (it->second->ts == my_ts){
-                        if (print_answer)
-                            std::cout << "|";
-                        print_answer = true;
-                        std::cout << it->first;
-                    }
-                }
-            }
-            if (!print_answer)
-                std::cout << -1;
-            std::cout << std::endl;
-            global_flag = FLAG_NONE;
+            std::getline(std::cin, raw_queries[raw_query_tail].query);
+            raw_queries[raw_query_tail].ts = ts;
+            raw_queries[raw_query_tail].finished = 0;
+            __sync_synchronize();
+            raw_query_tail++;
         }
     }
 }
 
 int main(int argc, char *argv[]){
     std::ios::sync_with_stdio(false);
-    for (int i = 0; i < NUM_THREAD; i++)
-        initTrie(&trie[i]);
-#ifdef DBG_LOG
-    std::cerr<<"initTree done" << std::endl;
-#endif
     initThread();
 #ifdef DBG_LOG
     std::cerr<<"initThread done" << std::endl;
@@ -214,11 +283,6 @@ int main(int argc, char *argv[]){
     destroyThread();
 #ifdef DBG_LOG
     std::cerr<<"destroyThread done" << std::endl;
-#endif
-    for (int i = 0; i < NUM_THREAD; i++)
-        destroyTrie(trie[i]);
-#ifdef DBG_LOG
-    std::cerr<<"destroyTrie done" << std::endl;
 #endif
     return 0;
 }
