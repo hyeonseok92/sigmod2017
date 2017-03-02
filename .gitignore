@@ -13,3 +13,6 @@ cscope.*
 
 # Ignore test files
 *.all
+
+# Ignore swp files
+*.swp
