@@ -12,9 +12,9 @@ struct ModifyOp{
 typedef std::pair<const char*, int>cand_t;
 struct QueryInfo{
     unsigned int ts;
+    unsigned int finished;
     std::string query;
     std::vector<cand_t> res[NUM_THREAD];
-    unsigned int finished;
 };
 
 struct QueryOp{

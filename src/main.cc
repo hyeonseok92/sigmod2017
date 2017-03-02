@@ -176,8 +176,9 @@ void input(){
 void printQuery(){
     unsigned int it[NUM_THREAD];
     int tot;
+    QueryInfo *queryinfo;
     for (int i = 0; i < raw_query_tail; i++){
-        QueryInfo *queryinfo = &raw_queries[i];
+        queryinfo = &raw_queries[i];
         while(queryinfo->finished != NUM_THREAD)
             my_yield();
         tot = 0;
@@ -216,6 +217,12 @@ void printQuery(){
             printf("\n");
         }
     }
+    fflush(stdout);
+    for (int i = 0; i < raw_query_tail; i++){
+        for (int j = 0; j < NUM_THREAD; j++)
+            raw_queries[i].res[j].clear();
+    }
+    raw_query_head = raw_query_tail = 0;
 }
 
 void workload(){
@@ -234,8 +241,6 @@ void workload(){
         std::cin >> cmd;
         if (cmd.compare("F") == 0){
             printQuery();
-            raw_query_head = raw_query_tail = 0;
-            fflush(stdout);
             std::cin >> cmd;
             if (cmd.compare("F") == 0){
                 global_flag = FLAG_WORK_END;
@@ -257,9 +262,9 @@ void workload(){
 #ifdef DBG_TS
             std::cout << ts << " ";
 #endif
-            std::getline(std::cin, raw_queries[raw_query_tail].query);
             raw_queries[raw_query_tail].ts = ts;
             raw_queries[raw_query_tail].finished = 0;
+            std::getline(std::cin, raw_queries[raw_query_tail].query);
             __sync_synchronize();
             raw_query_tail++;
         }
