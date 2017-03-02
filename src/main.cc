@@ -12,7 +12,7 @@
 #include "trie.h"
 #include "thread_struct.h"
 
-#define NUM_THREAD 4
+#define NUM_THREAD 39
 #define my_hash(x) (((unsigned char)(x))%NUM_THREAD)
 
 #define USE_YIELD
@@ -118,6 +118,11 @@ void input(){
     }
 }
 
+#ifdef DBG_TIME
+    struct timespec startQ, endQ;
+    unsigned long long timeQ;
+#endif
+
 void workload(){
     std::string cmd;
     std::string buf;
@@ -143,6 +148,9 @@ void workload(){
             worker->tail++;
         }
         else{
+#ifdef DBG_TIME
+            clock_gettime(CLOCK_MONOTONIC, &startQ);
+#endif
             ts++;
 #ifdef DBG_TS
             std::cout << ts << " ";
@@ -179,6 +187,11 @@ void workload(){
             std::cout << std::endl;
 #endif
             global_flag = FLAG_NONE;
+#ifdef DBG_TIME
+            clock_gettime(CLOCK_MONOTONIC, &endQ);
+            timeQ += ((endQ.tv_sec - startQ.tv_sec) * 1000000000 + (endQ.tv_nsec - startQ.tv_nsec));
+#endif
+
         }
     }
 }
@@ -206,6 +219,8 @@ int main(int argc, char *argv[]){
 #ifdef DBG_TIME
     clock_gettime(CLOCK_MONOTONIC, &end);
     printf("%llu\n", ((end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec))/1000000);
+
+    printf("%llu\n", timeQ/1000000);
 #endif
 #ifdef DBG_LOG
     std::cerr<<"workload done" << std::endl;
