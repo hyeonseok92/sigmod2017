@@ -1,6 +1,6 @@
 #pragma once
 #include <iostream>
-#define MAX_BATCH_SIZE 1000
+#define MAX_BATCH_SIZE 100000
 
 struct Operation{
     char cmd;
