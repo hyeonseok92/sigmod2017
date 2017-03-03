@@ -42,12 +42,28 @@ const char *query_str;
 int size_query;
 int sync_val;
 
+//http://stackoverflow.com/questions/1407786/how-to-set-cpu-affinity-of-a-particular-pthread
+int stick_to_core(int core_id) {
+   int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+   if (core_id < 0 || core_id >= num_cores)
+      return EINVAL;
+
+   cpu_set_t cpuset;
+   CPU_ZERO(&cpuset);
+   CPU_SET(core_id, &cpuset);
+
+   pthread_t current_thread = pthread_self();    
+   return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+}
+
 void *thread_main(void *arg){
 #ifdef TRACE_WORK
     int cntwork = 0;
 #endif
     ThrArg *myqueue = (ThrArg*)arg;
     int tid = myqueue->tid;
+    stick_to_core(tid+1);
+    my_yield();
     TrieNode *my_trie = trie[tid];
     std::vector<cand_t> *my_res = &res[tid];
     Operation *op;
@@ -193,6 +209,8 @@ void workload(){
 }
 
 int main(int argc, char *argv[]){
+    stick_to_core(0);
+    my_yield();
     std::ios::sync_with_stdio(false);
     for (int i = 0; i < NUM_THREAD; i++)
         initTrie(&trie[i]);
