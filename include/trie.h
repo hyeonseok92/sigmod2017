@@ -9,7 +9,6 @@ typedef std::map<char, TrieNode*> TrieMap;
 //typedef std::unordered_map<char, TrieNode*> TrieMap;
 struct TrieNode{
     unsigned int ts;
-    int cnt;
     TrieMap next;
 };
 

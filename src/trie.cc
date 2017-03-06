@@ -20,7 +20,6 @@ void addNgram(TrieNode* node, std::string const& ngram){
     TrieNode *newNode;
     for (std::string::const_iterator it = ngram.begin(); it != ngram.end(); it++){
         assert(node != NULL);
-        node->cnt++;
         temp = node->next.find(*it);
         if (temp == node->next.end()){
             newTrieNode(newNode);
@@ -31,7 +30,6 @@ void addNgram(TrieNode* node, std::string const& ngram){
         else
             node = temp->second;
     }
-    node->cnt++;
     node->ts = 1;
 }
 
@@ -39,37 +37,32 @@ void delNgram(TrieNode *node, std::string const& ngram){
     TrieMap::iterator temp;
     TrieNode *next;
     std::string::const_iterator it;
+    TrieNode *last_branch = node;
+    TrieMap::iterator last_branch_next = node->next.find(*ngram.begin());
 
-    if (ngram.begin() == ngram.end()){
-        node->cnt--;
-        node->ts = 0xFFFFFFFF;
-        return;
-    }
-    
     for (it = ngram.begin(); it != ngram.end(); it++){
-        node->cnt--;
-        assert(node->cnt > 0);
         temp = node->next.find(*it);
-        assert(temp != node->next.end());
+        if (temp == node->next.end())
+            return;
         next = temp->second;
-        if (next->cnt == 1){
-            node->next.erase(temp);
-            node = next;
-            break;
+        if (node->ts != 0xFFFFFFFF || (node->next.size() > 1 && next->next.size() <= 1)){
+            last_branch = node;
+            last_branch_next = temp;
         }
         node = next;
     }
-    if (it == ngram.end()){
-        node->cnt--;
+    if (node->next.size()){
         node->ts = 0xFFFFFFFF;
         return;
     }
-    for (++it; it != ngram.end(); it++){
+    node = last_branch_next->second;
+    while(node->next.size()){
         next = node->next.begin()->second;
         freeTrieNode(node);
         node = next;
     }
     freeTrieNode(node);
+    last_branch->next.erase(last_branch_next);
 }
 
 void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
