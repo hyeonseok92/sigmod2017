@@ -1,7 +1,7 @@
 #pragma once
 #include <iostream>
-#include <map>
-//#include <unordered_map>
+//#include <map>
+#include <unordered_map>
 #include <vector>
 
 typedef unsigned int mbyte_t;
@@ -10,8 +10,8 @@ typedef unsigned int mbyte_t;
 #define MBYTE_SIZE sizeof(mbyte_t)
 
 struct TrieNode;
-typedef std::map<mbyte_t, TrieNode*> TrieMap;
-//typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
+//typedef std::map<mbyte_t, TrieNode*> TrieMap;
+typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
 struct TrieNode{
     unsigned int ts;
     mbyte_t cache_ch;
@@ -22,7 +22,7 @@ struct TrieNode{
 typedef std::pair<std::string, TrieNode*> cand_t;
 #define MY_TS(tid) (((ts) << 6) | (NUM_THREAD-tid))
 
-#define USE_CALLOC
+//#define USE_CALLOC
 
 #ifdef USE_CALLOC
 #define newTrieNode(x) do{\
