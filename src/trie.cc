@@ -5,15 +5,20 @@
 #include <jemalloc/jemalloc.h>
 
 void initTrie(TrieNode** node){
-    *node = (TrieNode*) calloc(1, sizeof(TrieNode));
-    (*node)->next.clear();
+    newTrieNode(*node);
+}
+
+void destroyTrieNode(TrieNode* node){
+    for (TrieMap::iterator it = node->next.begin(); it !=  node->next.end(); it++){
+        destroyTrie(it->second);
+    }
+    freeTrieNode(node);
 }
 
 void destroyTrie(TrieNode* node){
     for (TrieMap::iterator it = node->next.begin(); it !=  node->next.end(); it++){
-        destroyTrie(it->second);
+        destroyTrieNode(it->second);
     }
-    free(node);
 }
 
 void addNgram(TrieNode* node, const char *ngram){
@@ -23,19 +28,29 @@ void addNgram(TrieNode* node, const char *ngram){
         mbyte_t key = 0;
         for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
             key += (((mbyte_t)*it) << (i*8));
-        node->cnt++;
+
+        if (node->cache_ch == 0){
+            newTrieNode(newNode);
+            newNode->ts = 0xFFFFFFFF;
+            node->cache_ch = key;
+            node->cache_next = newNode;
+            node = newNode;
+            continue;
+        }
+        if (node->cache_ch == key){
+            node = node->cache_next;
+            continue;
+        }
         temp = node->next.find(key);
         if (temp == node->next.end()){
-            newNode = newTrieNode();
+            newTrieNode(newNode);
             newNode->ts = 0xFFFFFFFF;
-            newNode->next.clear();
             node->next[key] = newNode;
             node = newNode;
         }
         else
             node = temp->second;
     }
-    node->cnt++;
     node->ts = 0;
 }
 
@@ -43,41 +58,63 @@ void delNgram(TrieNode *node, const char *ngram){
     TrieMap::iterator temp;
     TrieNode *next;
     const char *it;
+    TrieNode *last_branch = node;
+    TrieMap::iterator last_branch_next = node->next.find(*ngram);
 
-    if (*ngram == 0){
-        node->cnt--;
-        node->ts = 0xFFFFFFFF;
-        return;
-    }
-    
     for (it = ngram; *it; ){
-        node->cnt--;
         mbyte_t key = 0;
         for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
             key += ((mbyte_t)(*it) << (i*8));
-        temp = node->next.find(key);
-        next = temp->second;
-        if (next->cnt == 1){
-            node->next.erase(temp);
+
+        if (node->cache_ch == 0)
+            return;
+        if (node->cache_ch == key){
+            next = node->cache_next;
+            if (node->ts != 0xFFFFFFFF || (node->next.size() && !next->next.size())){
+                last_branch = node;
+                last_branch_next = node->next.end();
+            }
             node = next;
-            break;
+            continue;
+        }
+
+        temp = node->next.find(key);
+        if (temp == node->next.end())
+            return;
+        next = temp->second;
+        //If this is the end of a ngram or this node have more than 1 child node, and next have less than 2 child node
+        if (node->ts != 0xFFFFFFFF || (node->next.size() && !next->next.size())){ 
+            last_branch = node;
+            last_branch_next = temp;
         }
         node = next;
     }
-    if (!(*it)){
-        node->cnt--;
+
+    if (node->cache_ch){ //If there is more than 1 child node
         node->ts = 0xFFFFFFFF;
         return;
     }
-    for (++it; *it; ){
-        mbyte_t key = 0;
-        for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
-            key += ((mbyte_t)(*it) << (i*8));
-        next = node->next.begin()->second;
-        free(node);
+    if (last_branch_next == last_branch->next.end()){
+        node = last_branch->cache_next;
+        if (last_branch->next.size()){
+            last_branch->cache_ch = last_branch->next.begin()->first;
+            last_branch->cache_next = last_branch->next.begin()->second;
+            last_branch->next.erase(last_branch->next.begin());
+        }
+        else
+            last_branch->cache_ch = 0;
+    }
+    else{
+        node = last_branch_next->second;
+        last_branch->next.erase(last_branch_next);
+    }
+
+    while(node->cache_ch){ //If there is more than 1 child node
+        next = node->cache_next;
+        freeTrieNode(node);
         node = next;
     }
-    free(node);
+    freeTrieNode(node);
 }
 
 void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
@@ -90,6 +127,20 @@ void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, 
             key += ((mbyte_t)(*it) << (i*8));
             buf += *it;
             if (*(it+1) == ' '){
+                if (node->cache_ch == 0)
+                    continue;
+                if (node->cache_ch == key){
+                    node_ts = node->cache_next->ts;
+                    while (node_ts < my_ts){
+                        if (__sync_bool_compare_and_swap(&node->cache_next->ts, node_ts, my_ts)){
+                            cands->emplace_back(make_pair(buf, node->cache_next));
+                            break;
+                        }
+                        node_ts = node->cache_next->ts;
+                    }
+                    continue;
+                }
+
                 temp = node->next.find(key);
                 if (temp != node->next.end()){
                     node_ts = temp->second->ts;
@@ -103,6 +154,13 @@ void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, 
                 }
             }
         }
+        if (node->cache_ch == 0)
+            return;
+        if (node->cache_ch == key){
+            node = node->cache_next;
+            continue;
+        }
+
         temp = node->next.find(key);
         if (temp == node->next.end())
             return;

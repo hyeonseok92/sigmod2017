@@ -1,24 +1,42 @@
 #pragma once
 #include <iostream>
 #include <map>
+//#include <unordered_map>
 #include <vector>
 
-//typedef unsigned long long int mbyte_t;
-typedef unsigned short mbyte_t;
+typedef unsigned int mbyte_t;
+//typedef unsigned short mbyte_t;
 //typedef unsigned char mbyte_t;
 #define MBYTE_SIZE sizeof(mbyte_t)
 
 struct TrieNode;
 typedef std::map<mbyte_t, TrieNode*> TrieMap;
+//typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
 struct TrieNode{
     unsigned int ts;
-    int cnt;
+    mbyte_t cache_ch;
+    TrieNode *cache_next;
     TrieMap next;
 };
 
 typedef std::pair<std::string, TrieNode*> cand_t;
 #define MY_TS(tid) (((ts) << 6) | (NUM_THREAD-tid))
-#define newTrieNode() ((TrieNode*) calloc(1, sizeof(TrieNode)))
+
+#define USE_CALLOC
+
+#ifdef USE_CALLOC
+#define newTrieNode(x) do{\
+    (x) = (TrieNode*) calloc(1, sizeof(TrieNode));\
+    (x)->next.clear();\
+}while(0)
+#define freeTrieNode(x) free(x)
+#else
+#define newTrieNode(x) do{\
+    (x) = new TrieNode;\
+    (x)->cache_ch = 0;\
+}while(0)
+#define freeTrieNode(x) delete (x)
+#endif
 
 void initTrie(TrieNode** node);
 void destroyTrie(TrieNode* node);
