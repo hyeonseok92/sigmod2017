@@ -62,12 +62,13 @@ void delNgram(TrieNode *node, const char *ngram){
     TrieMap::iterator last_branch_next = node->next.find(*ngram);
 
     for (it = ngram; *it; ){
+        if (node->cache_ch == 0)
+            return;
+
         mbyte_t key = 0;
         for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
             key += ((mbyte_t)(*it) << (i*8));
 
-        if (node->cache_ch == 0)
-            return;
         if (node->cache_ch == key){
             next = node->cache_next;
             if (node->ts != 0xFFFFFFFF || (node->next.size() && !next->next.size())){
@@ -122,6 +123,8 @@ void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, 
     TrieMap::iterator temp;
     unsigned int node_ts;
     for (const char* it = query; *it; ){
+        if (node->cache_ch == 0)
+            return;
         mbyte_t key = 0;
         for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++){
             key += ((mbyte_t)(*it) << (i*8));
@@ -154,8 +157,6 @@ void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, 
                 }
             }
         }
-        if (node->cache_ch == 0)
-            return;
         if (node->cache_ch == key){
             node = node->cache_next;
             continue;
