@@ -4,13 +4,21 @@
 //#include <unordered_map>
 #include <vector>
 
+#define CACHE_CH(p)     ((char)(p>>56))
+#define CACHE_NEXT(p)   ((TrieNode*)(p&0x0000FFFFFFFFFFFF))
+#define IS_ALPHA(c)     ((c>>5)==0x03)
+#define FLAG_ALPHA(c)   (1<<(c&0x1F))
+#define UNFLAG_ALPHA(c) (0xFF^(1<<(c&0x1F)))
+
 struct TrieNode;
 typedef std::map<char, TrieNode*> TrieMap;
 //typedef std::unordered_map<char, TrieNode*> TrieMap;
 struct TrieNode{
     unsigned int ts;
-    char cache_ch;
-    TrieNode *cache_next;
+//    char cache_ch;
+//    TrieNode *cache_next;
+    unsigned int bitmap;
+    unsigned long long cache;
     TrieMap next;
 };
 

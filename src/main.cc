@@ -28,6 +28,8 @@
 #define FLAG_QUERY 1
 #define FLAG_END 2
 
+#define POOL_SIZE   4096
+
 TrieNode *trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
@@ -41,6 +43,13 @@ std::vector<cand_t> res[NUM_THREAD];
 const char *query_str;
 int size_query;
 int sync_val;
+
+struct HashMap {
+    unsigned int map[256];
+};
+
+TrieNode node_pool[NUM_THREAD][POOL_SIZE];
+HashMap hash_pool[NUM_THREAD][POOL_SIZE];
 
 //http://stackoverflow.com/questions/1407786/how-to-set-cpu-affinity-of-a-particular-pthread
 int stick_to_core(int core_id) {
