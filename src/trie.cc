@@ -53,59 +53,22 @@ void addNgram(TrieNode* node, std::string const& ngram){
 
 void delNgram(TrieNode *node, std::string const& ngram){
     TrieMap::iterator temp;
-    TrieNode *next;
     std::string::const_iterator it;
-    TrieNode *last_branch = node;
-    TrieMap::iterator last_branch_next = node->next.find(*ngram.begin());
 
     for (it = ngram.begin(); it != ngram.end(); it++){
         if (node->cache_ch == 0)
             return;
         if (node->cache_ch == *it){
-            next = node->cache_next;
-            if (node->ts != 0xFFFFFFFF || (node->next.size() && !next->next.size())){
-                last_branch = node;
-                last_branch_next = node->next.end();
-            }
-            node = next;
+            node = node->cache_next;
             continue;
         }
 
         temp = node->next.find(*it);
         if (temp == node->next.end())
             return;
-        next = temp->second;
-        //If this is the end of a ngram or this node have more than 1 child node, and next have less than 2 child node
-        if (node->ts != 0xFFFFFFFF || (node->next.size() && !next->next.size())){ 
-            last_branch = node;
-            last_branch_next = temp;
-        }
-        node = next;
+        node = temp->second;
     }
-    if (node->cache_ch){ //If there is more than 1 child node
-        node->ts = 0xFFFFFFFF;
-        return;
-    }
-    if (last_branch_next == last_branch->next.end()){
-        node = last_branch->cache_next;
-        if (last_branch->next.size()){
-            last_branch->cache_ch = last_branch->next.begin()->first;
-            last_branch->cache_next = last_branch->next.begin()->second;
-            last_branch->next.erase(last_branch->next.begin());
-        }
-        else
-            last_branch->cache_ch = 0;
-    }
-    else{
-        node = last_branch_next->second;
-        last_branch->next.erase(last_branch_next);
-    }
-    while(node->cache_ch){ //If there is more than 1 child node
-        next = node->cache_next;
-        freeTrieNode(node);
-        node = next;
-    }
-    freeTrieNode(node);
+    node->ts = 0xFFFFFFFF;
 }
 
 void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
