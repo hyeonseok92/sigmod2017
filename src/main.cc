@@ -127,6 +127,30 @@ inline void print(){
     std::cout << std::endl;
 }
 
+inline void chkOverflowTs(){
+    if (unlikely(ts >= MAX_TS)){
+        ts = 0;
+        for (int i = 0; i < NUM_THREAD; i++){
+            touchTrie(&trie[i]);
+            started[i] = finished[i] = 0;
+        }
+    }
+}
+
+inline void chkOverflowTp(){
+    if (unlikely(tp >= MAX_BATCH_SIZE-1)){
+        tasks[tp] = "Q ";
+        __sync_synchronize(); //Prevent Code Relocation
+        ts++;
+        __sync_synchronize(); //Prevent Code Relocation
+        for (int i = 0; i < NUM_THREAD; i++)
+            while(finished[i] != ts) my_yield();
+        tp = 0;
+        chkOverflowTs();
+    }
+}
+
+
 void workload(){
     for (int i = 0; i < NUM_BUF_RESERVE; i++){
         tasks[i].reserve(BUF_RESERVE);
@@ -159,30 +183,10 @@ void workload(){
             __sync_synchronize(); //Prevent Code Relocation
             print();
             tp = -1;
-            if (unlikely(ts >= MAX_TS)){
-                ts = 0;
-                for (int i = 0; i < NUM_THREAD; i++){
-                    touchTrie(&trie[i]);
-                    started[i] = finished[i] = 0;
-                }
-            }
+            chkOverflowTs();
         }
-        if (unlikely(++tp >= MAX_BATCH_SIZE-1)){
-            tasks[tp] = "Q ";
-            __sync_synchronize(); //Prevent Code Relocation
-            ts++;
-            __sync_synchronize(); //Prevent Code Relocation
-            for (int i = 0; i < NUM_THREAD; i++)
-                while(finished[i] != ts) my_yield();
-            tp = 0;
-            if (unlikely(ts >= MAX_TS)){
-                ts = 0;
-                for (int i = 0; i < NUM_THREAD; i++){
-                    touchTrie(&trie[i]);
-                    started[i] = finished[i] = 0;
-                }
-            }
-        }
+        ++tp;
+        chkOverflowTp();
     }
 }
 
