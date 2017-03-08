@@ -1,4 +1,0 @@
-./include/trie.h
-./include/thread_struct.h
-./src/trie.cc
-./src/main.cc
