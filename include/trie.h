@@ -9,6 +9,8 @@ typedef std::map<char, TrieNode*> TrieMap;
 //typedef std::unordered_map<char, TrieNode*> TrieMap;
 struct TrieNode{
     unsigned int ts;
+    char cache_ch;
+    TrieNode *cache_next;
     TrieMap next;
 };
 
@@ -26,7 +28,7 @@ typedef std::pair<std::string, TrieNode*> cand_t;
 #else
 #define newTrieNode(x) do{\
     (x) = new TrieNode;\
-    (x)->cnt = 0;\
+    (x)->cache_ch = 0;
 }while(0)
 #define freeTrieNode(x) delete (x)
 #endif
