@@ -8,11 +8,17 @@ void initTrie(TrieNode** node){
     newTrieNode(*node);
 }
 
-void destroyTrie(TrieNode* node){
+void destroyTrieNode(TrieNode* node){
     for (TrieMap::iterator it = node->next.begin(); it !=  node->next.end(); it++){
         destroyTrie(it->second);
     }
     freeTrieNode(node);
+}
+
+void destroyTrie(TrieNode* node){
+    for (TrieMap::iterator it = node->next.begin(); it !=  node->next.end(); it++){
+        destroyTrieNode(it->second);
+    }
 }
 
 void addNgram(TrieNode* node, std::string const& ngram){

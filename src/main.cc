@@ -28,7 +28,7 @@
 #define FLAG_QUERY 1
 #define FLAG_END 2
 
-TrieNode *trie[NUM_THREAD];
+TrieNode trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
 
@@ -64,7 +64,7 @@ void *thread_main(void *arg){
     int tid = myqueue->tid;
     stick_to_core(tid+1);
     my_yield();
-    TrieNode *my_trie = trie[tid];
+    TrieNode *my_trie = &trie[tid];
     std::vector<cand_t> *my_res = &res[tid];
     Operation *op;
     my_res->reserve(RES_RESERVE);
@@ -103,7 +103,7 @@ void *thread_main(void *arg){
                     int hval = my_hash(*c);
                     while(started[hval][0] != ts)
                         my_yield();
-                    queryNgram(my_res, MY_TS(tid), trie[hval], c);
+                    queryNgram(my_res, MY_TS(tid), &trie[hval], c);
                 }
                 __sync_synchronize(); //Prevent Code Relocation
                 finished[tid][0] = ts;
@@ -145,7 +145,7 @@ void input(){
         if (buf.compare("S") == 0)
             break;
         else
-            addNgram(trie[my_hash(*buf.begin())], buf);
+            addNgram(&trie[my_hash(*buf.begin())], buf);
     }
 }
 
@@ -212,8 +212,8 @@ int main(int argc, char *argv[]){
     stick_to_core(0);
     my_yield();
     std::ios::sync_with_stdio(false);
-    for (int i = 0; i < NUM_THREAD; i++)
-        initTrie(&trie[i]);
+//    for (int i = 0; i < NUM_THREAD; i++)
+//        initTrie(&trie[i]);
 #ifdef DBG_LOG
     std::cerr<<"initTree done" << std::endl;
 #endif
@@ -234,7 +234,7 @@ int main(int argc, char *argv[]){
     std::cerr<<"destroyThread done" << std::endl;
 #endif
     for (int i = 0; i < NUM_THREAD; i++)
-        destroyTrie(trie[i]);
+        destroyTrie(&trie[i]);
 #ifdef DBG_LOG
     std::cerr<<"destroyTrie done" << std::endl;
 #endif
