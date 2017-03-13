@@ -195,11 +195,11 @@ void workload(){
                 while(finished[i][0] != ts) my_yield();
                 unsigned int my_ts = MY_TS(i);
                 for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
-                    if (it->second->ts == my_ts){
+                    if (it->from->ts == my_ts){
                         if (print_answer)
                             std::cout << "|";
                         print_answer = true;
-                        std::cout << it->first;
+                        std::cout.write(it->start, it->size);
                     }
                 }
             }

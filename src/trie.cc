@@ -4,6 +4,20 @@
 #include <vector>
 #include <jemalloc/jemalloc.h>
 
+#define TRY_SIGN(node) do{\
+    node_ts = (node)->ts;\
+    while (node_ts < my_ts){\
+        if (__sync_bool_compare_and_swap(&(node)->ts, node_ts, my_ts)){\
+            cand.from = (node);\
+            cand.start = query;\
+            cand.size = (it - query)+1;\
+            cands->emplace_back(cand);\
+            break;\
+        }\
+        node_ts = (node)->ts;\
+    }\
+}while(0)
+
 void initTrie(TrieNode** node){
     newTrieNode(*node);
 }
@@ -119,42 +133,27 @@ void delNgram(TrieNode *node, const char *ngram){
 }
 
 void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
-    std::string buf;
     TrieMap::iterator temp;
     unsigned int node_ts;
-    for (const char* it = query; *it; ){
+    cand_t cand;
+    const char *it = query;
+    while(*it){
         if (node->cache_ch == 0)
             return;
         mbyte_t key = 0;
         for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++){
             key += ((mbyte_t)(*it) << (i*8));
-            buf += *it;
             if (*(it+1) == ' '){
                 if (node->cache_ch == 0)
                     continue;
                 if (node->cache_ch == key){
-                    node_ts = node->cache_next->ts;
-                    while (node_ts < my_ts){
-                        if (__sync_bool_compare_and_swap(&node->cache_next->ts, node_ts, my_ts)){
-                            cands->emplace_back(make_pair(buf, node->cache_next));
-                            break;
-                        }
-                        node_ts = node->cache_next->ts;
-                    }
+                    TRY_SIGN(node->cache_next);
                     continue;
                 }
 
                 temp = node->next.find(key);
-                if (temp != node->next.end()){
-                    node_ts = temp->second->ts;
-                    while (node_ts < my_ts){
-                        if (__sync_bool_compare_and_swap(&temp->second->ts, node_ts, my_ts)){
-                            cands->emplace_back(make_pair(buf, temp->second));
-                            break;
-                        }
-                        node_ts = temp->second->ts;
-                    }
-                }
+                if (temp != node->next.end())
+                    TRY_SIGN(temp->second);
             }
         }
         if (node->cache_ch == key){
@@ -167,12 +166,6 @@ void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, 
             return;
         node = temp->second;
     }
-    node_ts = node->ts;
-    while (node_ts < my_ts){
-        if (__sync_bool_compare_and_swap(&node->ts, node_ts, my_ts)){
-            cands->emplace_back(make_pair(buf, node));
-            break;
-        }
-        node_ts = node->ts;
-    }
+    it--;
+    TRY_SIGN(node);
 }
