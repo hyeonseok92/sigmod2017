@@ -215,8 +215,6 @@ int main(int argc, char *argv[]){
     stick_to_core(0);
     my_yield();
     std::ios::sync_with_stdio(false);
-//    for (int i = 0; i < NUM_THREAD; i++)
-//        initTrie(&trie[i]);
 #ifdef DBG_LOG
     std::cerr<<"initTree done" << std::endl;
 #endif
