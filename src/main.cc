@@ -11,7 +11,7 @@
 //#define DBG_TS
 //#define DBG_LOG
 
-#define NUM_THREAD 39
+#define NUM_THREAD 37
 #define RES_RESERVE 128
 #define CMD_RESERVE 4
 #define BUF_RESERVE 1024*1024
