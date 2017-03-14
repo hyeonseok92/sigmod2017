@@ -106,7 +106,7 @@ void *thread_main(void *arg){
                     int hval = my_hash(*c);
                     while(started[hval][0] != ts)
                         my_yield();
-                    queryNgram(my_res, MY_TS(tid), &trie[hval], c);
+                    queryNgram(my_res, MY_SIGN(tid), &trie[hval], c);
                 }
                 __sync_synchronize(); //Prevent Code Relocation
                 finished[tid][0] = ts;
@@ -193,7 +193,7 @@ void workload(){
             bool print_answer = false;
             for (int i = 0; i < NUM_THREAD; i++){
                 while(finished[i][0] != ts) my_yield();
-                unsigned int my_ts = MY_TS(i);
+                unsigned int my_ts = MY_SIGN(i);
                 for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
                     if (it->from->ts == my_ts){
                         if (print_answer)

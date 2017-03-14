@@ -25,7 +25,7 @@ struct cand_t{
     int size;
 };
 //typedef std::pair<std::string, TrieNode*> cand_t;
-#define MY_TS(tid) (((ts) << 6) | (NUM_THREAD-tid))
+#define MY_SIGN(tid) (((ts) << 6) | (NUM_THREAD-tid))
 
 #define USE_CALLOC
 
