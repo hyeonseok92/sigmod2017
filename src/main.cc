@@ -19,13 +19,7 @@
 
 //#define TRACE_WORK
 
-#define USE_YIELD
-
-#ifdef USE_YIELD
-#define my_yield() pthread_yield()
-#else
-#define my_yield()
-#endif
+#define my_yield() __sync_synchronize()//pthread_yield()
 
 #define FLAG_NONE 0
 #define FLAG_QUERY 1
@@ -35,7 +29,7 @@ TrieNode trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
 
-unsigned int ts;
+unsigned int ts = 1;
 
 int global_flag;
 unsigned int started[NUM_THREAD][16];
