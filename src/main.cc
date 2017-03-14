@@ -68,7 +68,7 @@ void *thread_main(void *arg){
     __sync_synchronize();
     __sync_fetch_and_add(&sync_val, 1);
     while(1){
-        while(myqueue->head == myqueue->tail){
+        if (myqueue->head == myqueue->tail){
             if (global_flag == FLAG_NONE){
                 my_yield();
                 continue;
@@ -79,7 +79,7 @@ void *thread_main(void *arg){
                     continue;
                 }
                 __sync_synchronize(); //Load Memory barrier
-                if (myqueue->head != myqueue->tail) break;
+                if (myqueue->head != myqueue->tail) continue;
                 __sync_synchronize(); //Prevent Code Relocation
                 int size = 1 + (size_query-1) / NUM_THREAD;
                 const char *start = query_str + size * tid;
@@ -104,6 +104,7 @@ void *thread_main(void *arg){
                 }
                 __sync_synchronize(); //Prevent Code Relocation
                 finished[tid][0] = ts;
+                continue;
             }
             else{
 #ifdef TRACE_WORK
@@ -112,14 +113,17 @@ void *thread_main(void *arg){
                 pthread_exit((void*)NULL);
             }
         }
+        else{
 #ifdef TRACE_WORK
-        cntwork++;
+            cntwork++;
 #endif
-        op = &(myqueue->operations[myqueue->head++]);
-        if (op->cmd == 'A')
-            addNgram(my_trie, &op->str[0]);
-        else
-            delNgram(my_trie, &op->str[0]);
+            op = &(myqueue->operations[myqueue->head++]);
+            if (op->cmd == 'A')
+                addNgram(my_trie, &op->str[0]);
+            else
+                delNgram(my_trie, &op->str[0]);
+            continue;
+        }
     }
     pthread_exit((void*)NULL);
 }
