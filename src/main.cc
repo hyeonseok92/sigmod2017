@@ -12,6 +12,7 @@
 //#define DBG_LOG
 
 #define NUM_THREAD 37
+//#define NEXT_RESERVE 4096
 #define RES_RESERVE 128
 #define CMD_RESERVE 4
 #define BUF_RESERVE 1024*1024
@@ -35,6 +36,8 @@ int global_flag;
 unsigned int started[NUM_THREAD][16];
 unsigned int finished[NUM_THREAD][16];
 std::vector<cand_t> res[NUM_THREAD];
+std::string tasks[MAX_BATCH_SIZE];
+int tp;
 const char *query_str;
 int size_query;
 int sync_val;
@@ -65,6 +68,7 @@ void *thread_main(void *arg){
     std::vector<cand_t> *my_res = &res[tid];
     Operation *op;
     my_res->reserve(RES_RESERVE);
+    //my_trie->next.reserve(NEXT_RESERVE);
     __sync_synchronize();
     __sync_fetch_and_add(&sync_val, 1);
     while(1){
@@ -119,9 +123,9 @@ void *thread_main(void *arg){
 #endif
             op = &(myqueue->operations[myqueue->head++]);
             if (op->cmd == 'A')
-                addNgram(my_trie, &op->str[0]);
+                addNgram(my_trie, op->str);
             else
-                delNgram(my_trie, &op->str[0]);
+                delNgram(my_trie, op->str);
             continue;
         }
     }
@@ -169,16 +173,18 @@ void workload(){
                 break;
             }
         }
-        std::getline(std::cin, buf);
         if (cmd.compare("Q") != 0){
-            buf.erase(buf.begin());
-            ThrArg *worker = &args[my_hash(*buf.begin())];
+            std::getline(std::cin, tasks[tp]);
+            tasks[tp].erase(tasks[tp].begin());
+            ThrArg *worker = &args[my_hash(*tasks[tp].begin())];
             worker->operations[worker->tail].cmd = *(cmd.begin());
-            worker->operations[worker->tail].str = buf;
+            worker->operations[worker->tail].str = &tasks[tp][0];
+            tp++;
             __sync_synchronize(); //Prevent Code Relocation
             worker->tail++;
         }
         else{
+            std::getline(std::cin, buf);
             ts++;
 #ifdef DBG_TS
             std::cout << ts << " ";
@@ -204,6 +210,7 @@ void workload(){
             if (!print_answer)
                 std::cout << -1;
             std::cout << std::endl;
+            tp = 0;
             global_flag = FLAG_NONE;
         }
     }

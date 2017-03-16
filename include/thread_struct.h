@@ -4,7 +4,7 @@
 
 struct Operation{
     char cmd;
-    std::string str;
+    const char *str;
 };
 struct ThrArg{
     int head;
