@@ -14,8 +14,8 @@
 #define NUM_THREAD 37
 //#define NEXT_RESERVE 4096
 #define RES_RESERVE 128
-#define CMD_RESERVE 4
 #define BUF_RESERVE 1024*1024
+#define NUM_BUF_RESERVE 10000
 #define my_hash(x) (((mbyte_t)(x))%NUM_THREAD)
 
 //#define TRACE_WORK
@@ -95,10 +95,7 @@ void *thread_main(void *arg){
                 my_res->clear();
                 __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){
-                    if (*c == ' ')
-                        c++;
-                    else
-                        while(c != end && *(c-1) != ' ') c++;
+                    while(c != end && *(c-1) != ' ') c++;
                     if (c == end)
                         break;
                     int hval = my_hash(*c);
@@ -129,7 +126,6 @@ void *thread_main(void *arg){
             continue;
         }
     }
-    pthread_exit((void*)NULL);
 }
 
 void initThread(){
@@ -155,42 +151,37 @@ void input(){
 }
 
 void workload(){
-    std::string cmd;
-    std::string buf;
-    cmd.reserve(CMD_RESERVE);
-    buf.reserve(BUF_RESERVE);
+    for (int i = 0; i < NUM_BUF_RESERVE; i++){
+        tasks[i].reserve(BUF_RESERVE);
+    }
     while(sync_val != NUM_THREAD)
         my_yield();
     printf("R\n");
     fflush(stdout);
     while(!std::cin.eof()){
-        std::cin >> cmd;
-        if (cmd.compare("F") == 0){
+        std::getline(std::cin, tasks[tp]);
+        if (tasks[tp][0] == 'F'){
             fflush(stdout);
-            std::cin >> cmd;
-            if (cmd.compare("F") == 0){
+            std::getline(std::cin, tasks[tp]);
+            if (tasks[tp][0] == '\0'){
                 global_flag = FLAG_END;
                 break;
             }
         }
-        if (cmd.compare("Q") != 0){
-            std::getline(std::cin, tasks[tp]);
-            tasks[tp].erase(tasks[tp].begin());
-            ThrArg *worker = &args[my_hash(*tasks[tp].begin())];
-            worker->operations[worker->tail].cmd = *(cmd.begin());
-            worker->operations[worker->tail].str = &tasks[tp][0];
-            tp++;
+        if (tasks[tp][0] != 'Q'){
+            ThrArg *worker = &args[my_hash(tasks[tp][2])];
+            worker->operations[worker->tail].cmd = tasks[tp][0];
+            worker->operations[worker->tail].str = &tasks[tp][2];
             __sync_synchronize(); //Prevent Code Relocation
             worker->tail++;
         }
         else{
-            std::getline(std::cin, buf);
             ts++;
 #ifdef DBG_TS
             std::cout << ts << " ";
 #endif
-            query_str = buf.c_str();
-            size_query = buf.size();
+            query_str = &tasks[tp][2];
+            size_query = tasks[tp].size()-2;
             __sync_synchronize(); //Prevent Code Relocation
             global_flag = FLAG_QUERY;
             __sync_synchronize(); //Prevent Code Relocation
@@ -210,9 +201,10 @@ void workload(){
             if (!print_answer)
                 std::cout << -1;
             std::cout << std::endl;
-            tp = 0;
+            tp = -1;
             global_flag = FLAG_NONE;
         }
+        tp++;
     }
 }
 
