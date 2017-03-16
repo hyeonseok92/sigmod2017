@@ -66,7 +66,7 @@ void *thread_main(void *arg){
     my_yield();
     TrieNode *my_trie = &trie[tid];
     std::vector<cand_t> *my_res = &res[tid];
-    Operation *op;
+    const char *op;
     my_res->reserve(RES_RESERVE);
     //my_trie->next.reserve(NEXT_RESERVE);
     __sync_synchronize();
@@ -118,11 +118,11 @@ void *thread_main(void *arg){
 #ifdef TRACE_WORK
             cntwork++;
 #endif
-            op = &(myqueue->operations[myqueue->head++]);
-            if (op->cmd == 'A')
-                addNgram(my_trie, op->str);
+            op = myqueue->operations[myqueue->head++];
+            if (op[0] == 'A')
+                addNgram(my_trie, &op[2]);
             else
-                delNgram(my_trie, op->str);
+                delNgram(my_trie, &op[2]);
             continue;
         }
     }
@@ -170,8 +170,7 @@ void workload(){
         }
         if (tasks[tp][0] != 'Q'){
             ThrArg *worker = &args[my_hash(tasks[tp][2])];
-            worker->operations[worker->tail].cmd = tasks[tp][0];
-            worker->operations[worker->tail].str = &tasks[tp][2];
+            worker->operations[worker->tail] = &tasks[tp][0];
             __sync_synchronize(); //Prevent Code Relocation
             worker->tail++;
         }
