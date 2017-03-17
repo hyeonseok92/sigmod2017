@@ -1,5 +1,30 @@
-1. DVA
+1. 
+DVA
 2.
+Hyeonseok Oh, hyeonso5@gmail.com, Hanyang University, Republic of Korea, Department of Computer Science, Master's study program
+Jongbin Kim, mrbin20022@gmail.com, Hanyang University, Republic of Korea, Department of Computer Science, Master's study program
 3.
+Hyungsoo Jung
 4.
+1) We used Trie data structure to store ngrams and search ngrams from documents.
+2) There is Main thread which process input and output, and there are 37 threads which manage the separate trie and process the queries.
+2-1) Role of Main thread
+  - When Main thread gets a add or delete command, Main determine who must process this command by hash and push the query in the queue of the thread in charge.
+  - When Main thread gets a query command, Main broadcasts the query to all worker thread. And Main waits for all worker thread to finish their partition. After all worker threads finished, Main print the query result
+2-2) Role of Worker threads
+  - When Worker thread gets a add or delete command from his queue, the Worker thread add or delete the ngram at his own trie.
+  - Worker thread must do all the work in the queue before processing the next query command.
+  - When the queue is empty and there is a query command, Worker thread calculate their searching boundary by tid and find all ngrams in the boundary
+
+3) We did many optimization to improve the performance
+3-1) Remove duplicate ngrams by atomic compare and swap
+3-2) 64byte sized Node to maximize cache performance
+3-3) use in-node cache to improve when the number of child node is one.
+3-4) fine grained timestamp to maximize concurrency when processing query
+
+
+2)There are one main thread 
+2)We concentrated in cache line optimization
+
+
 5.
