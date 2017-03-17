@@ -118,7 +118,8 @@ void *thread_main(void *arg){
 #ifdef TRACE_WORK
             cntwork++;
 #endif
-            op = myqueue->operations[myqueue->head++];
+            op = myqueue->operations[myqueue->head];
+            myqueue->head = (myqueue->head+1)&(MAX_BATCH_SIZE-1);
             if (op[0] == 'A')
                 addNgram(my_trie, &op[2]);
             else
@@ -172,7 +173,7 @@ void workload(){
             ThrArg *worker = &args[my_hash(tasks[tp][2])];
             worker->operations[worker->tail] = &tasks[tp][0];
             __sync_synchronize(); //Prevent Code Relocation
-            worker->tail++;
+            worker->tail = (worker->tail+1) & (MAX_BATCH_SIZE-1);
         }
         else{
             ts++;
