@@ -18,21 +18,17 @@
 #define NUM_BUF_RESERVE 10000
 #define my_hash(x) (((mbyte_t)(x))%NUM_THREAD)
 
-//#define TRACE_WORK
 
 #define my_yield() __sync_synchronize()//pthread_yield()
 
 #define FLAG_NONE 0
-#define FLAG_QUERY 1
-#define FLAG_END 2
+#define FLAG_END 1
 
 TrieNode trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
 
-unsigned int ts = 1;
-
-int global_flag;
+unsigned int ts = 0;
 unsigned int started[NUM_THREAD][16];
 unsigned int finished[NUM_THREAD][16];
 std::vector<cand_t> res[NUM_THREAD];
@@ -57,9 +53,6 @@ int stick_to_core(int core_id) {
 }
 
 void *thread_main(void *arg){
-#ifdef TRACE_WORK
-    int cntwork = 0;
-#endif
     ThrArg *myqueue = (ThrArg*)arg;
     int tid = myqueue->tid;
     stick_to_core(tid+1);
@@ -73,25 +66,22 @@ void *thread_main(void *arg){
     __sync_fetch_and_add(&sync_val, 1);
     while(1){
         if (myqueue->head == myqueue->tail){
-            if (global_flag == FLAG_NONE){
+            if (started[tid][0] == ts){
                 my_yield();
                 continue;
             }
-            else if (global_flag == FLAG_QUERY){
-                if (started[tid][0] == ts){
-                    my_yield();
-                    continue;
-                }
+            else{
                 __sync_synchronize(); //Load Memory barrier
                 if (myqueue->head != myqueue->tail) continue;
                 __sync_synchronize(); //Prevent Code Relocation
                 int size = 1 + (size_query-1) / NUM_THREAD;
+                int my_sign = MY_SIGN(ts, tid);
                 const char *start = query_str + size * tid;
                 const char *end = start + size;
                 if (end-query_str > size_query)
                     end = query_str + size_query;
                 myqueue->head = myqueue->tail = 0;
-                started[tid][0] = ts;
+                started[tid][0]++;
                 my_res->clear();
                 __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){
@@ -101,25 +91,15 @@ void *thread_main(void *arg){
                     int hval = my_hash(*c);
                     while(started[hval][0] != ts)
                         my_yield();
-                    queryNgram(my_res, MY_SIGN(tid), &trie[hval], c);
+                    queryNgram(my_res, my_sign, &trie[hval], c);
                 }
                 __sync_synchronize(); //Prevent Code Relocation
-                finished[tid][0] = ts;
+                finished[tid][0]++;
                 continue;
-            }
-            else{
-#ifdef TRACE_WORK
-                fprintf(stderr, "%2d : %5d\n", tid,cntwork);
-#endif
-                pthread_exit((void*)NULL);
             }
         }
         else{
-#ifdef TRACE_WORK
-            cntwork++;
-#endif
-            op = myqueue->operations[myqueue->head];
-            myqueue->head = (myqueue->head+1)&(MAX_BATCH_SIZE-1);
+            op = myqueue->operations[myqueue->head++];
             if (op[0] == 'A')
                 addNgram(my_trie, &op[2]);
             else
@@ -127,6 +107,7 @@ void *thread_main(void *arg){
             continue;
         }
     }
+    pthread_exit((void*)NULL);
 }
 
 void initThread(){
@@ -165,30 +146,28 @@ void workload(){
             fflush(stdout);
             std::getline(std::cin, tasks[tp]);
             if (tasks[tp][0] == '\0'){
-                global_flag = FLAG_END;
-                break;
+                exit(0);
             }
         }
         if (tasks[tp][0] != 'Q'){
             ThrArg *worker = &args[my_hash(tasks[tp][2])];
             worker->operations[worker->tail] = &tasks[tp][0];
             __sync_synchronize(); //Prevent Code Relocation
-            worker->tail = (worker->tail+1) & (MAX_BATCH_SIZE-1);
+            worker->tail++;
         }
         else{
-            ts++;
 #ifdef DBG_TS
             std::cout << ts << " ";
 #endif
             query_str = &tasks[tp][2];
             size_query = tasks[tp].size()-2;
             __sync_synchronize(); //Prevent Code Relocation
-            global_flag = FLAG_QUERY;
+            ts++;
             __sync_synchronize(); //Prevent Code Relocation
             bool print_answer = false;
             for (int i = 0; i < NUM_THREAD; i++){
                 while(finished[i][0] != ts) my_yield();
-                unsigned int my_ts = MY_SIGN(i);
+                unsigned int my_ts = MY_SIGN(ts, i);
                 for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
                     if (it->from->ts == my_ts){
                         if (print_answer)
@@ -202,7 +181,6 @@ void workload(){
                 std::cout << -1;
             std::cout << std::endl;
             tp = -1;
-            global_flag = FLAG_NONE;
         }
         tp++;
     }
