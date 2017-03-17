@@ -1,6 +1,6 @@
 #pragma once
 #include <iostream>
-#define MAX_BATCH_SIZE 0x100000
+#define MAX_BATCH_SIZE 1000000
 
 struct ThrArg{
     int head;

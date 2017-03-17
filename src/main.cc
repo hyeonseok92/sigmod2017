@@ -17,13 +17,11 @@
 #define RES_RESERVE 128
 #define BUF_RESERVE 1024*1024
 #define NUM_BUF_RESERVE 10000
+
+#define MAX_TS 0x3FFFFFF //because my_sign use 6 shifted ts
 #define my_hash(x) (((mbyte_t)(x))%NUM_THREAD)
-
-
+#define my_sign(ts, tid) (((ts) << 6) | (NUM_THREAD-tid))
 #define my_yield() __sync_synchronize()//pthread_yield()
-
-#define FLAG_NONE 0
-#define FLAG_END 1
 
 TrieNode trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
@@ -53,7 +51,7 @@ void *thread_main(void *arg){
     __sync_fetch_and_add(&sync_val, 1);
     while(1){
         if (myqueue->head == myqueue->tail){
-            if (started[tid][0] == ts){
+            if (started[tid][0] >= ts){
                 my_yield();
                 continue;
             }
@@ -62,7 +60,7 @@ void *thread_main(void *arg){
                 if (myqueue->head != myqueue->tail) continue;
                 __sync_synchronize(); //Prevent Code Relocation
                 int size = 1 + (size_query-1) / NUM_THREAD;
-                int my_sign = MY_SIGN(ts, tid);
+                int my_sign = my_sign(ts, tid);
                 const char *start = query_str + size * tid;
                 const char *end = start + size;
                 if (end-query_str > size_query)
@@ -140,11 +138,11 @@ void workload(){
             ThrArg *worker = &args[my_hash(tasks[tp][2])];
             worker->operations[worker->tail] = &tasks[tp][0];
             __sync_synchronize(); //Prevent Code Relocation
-            worker->tail++;
+            ++worker->tail; // queue overflow is processed together when task overflow occured
         }
         else{
 #ifdef DBG_TS
-            std::cout << ts << " ";
+            std::cerr << ts << std::endl;
 #endif
             query_str = &tasks[tp][2];
             size_query = tasks[tp].size()-2;
@@ -154,7 +152,7 @@ void workload(){
             bool print_answer = false;
             for (int i = 0; i < NUM_THREAD; i++){
                 while(finished[i][0] != ts) my_yield();
-                unsigned int my_ts = MY_SIGN(ts, i);
+                unsigned int my_ts = my_sign(ts, i);
                 for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
                     if (it->from->ts == my_ts){
                         if (print_answer)
@@ -168,8 +166,31 @@ void workload(){
                 std::cout << -1;
             std::cout << std::endl;
             tp = -1;
+            if (unlikely(ts >= MAX_TS)){
+                ts = 0;
+                for (int i = 0; i < NUM_THREAD; i++){
+                    touchTrie(&trie[i]);
+                    started[i][0] = finished[i][0] = 0;
+                }
+            }
         }
-        tp++;
+        if (unlikely(++tp >= MAX_BATCH_SIZE)){
+            query_str = NULL;
+            size_query = 0;
+            __sync_synchronize(); //Prevent Code Relocation
+            ts++;
+            __sync_synchronize(); //Prevent Code Relocation
+            for (int i = 0; i < NUM_THREAD; i++)
+                while(finished[i][0] != ts) my_yield();
+            tp = 0;
+            if (unlikely(ts >= MAX_TS)){
+                ts = 0;
+                for (int i = 0; i < NUM_THREAD; i++){
+                    touchTrie(&trie[i]);
+                    started[i][0] = finished[i][0] = 0;
+                }
+            }
+        }
     }
 }
 
