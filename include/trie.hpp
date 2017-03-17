@@ -1,8 +1,46 @@
-#include "trie.h"
-#include <iostream>
-#include <assert.h>
-#include <vector>
+#pragma once
 #include <jemalloc/jemalloc.h>
+#include <iostream>
+//#include <map>
+#include <unordered_map>
+#include <vector>
+
+typedef unsigned int mbyte_t;
+//typedef unsigned short mbyte_t;
+//typedef unsigned char mbyte_t;
+#define MBYTE_SIZE sizeof(mbyte_t)
+
+struct TrieNode;
+//typedef std::map<mbyte_t, TrieNode*> TrieMap;
+typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
+struct TrieNode{
+    unsigned int ts;
+    mbyte_t cache_ch;
+    TrieNode *cache_next;
+    TrieMap next;
+};
+
+struct cand_t{
+    TrieNode *from;
+    const char *start;
+    int size;
+};
+
+#define USE_CALLOC
+
+#ifdef USE_CALLOC
+#define newTrieNode(x) do{\
+    (x) = (TrieNode*) calloc(1, sizeof(TrieNode));\
+    (x)->next = TrieMap();\
+}while(0)
+#define freeTrieNode(x) free(x)
+#else
+#define newTrieNode(x) do{\
+    (x) = new TrieNode;\
+    (x)->cache_ch = 0;\
+}while(0)
+#define freeTrieNode(x) delete (x)
+#endif
 
 #define TRY_SIGN(node) do{\
     node_ts = (node)->ts;\
@@ -20,7 +58,7 @@
 
 #define NOT_NGRAM 0xFFFFFFFF
 
-void addNgram(TrieNode* node, const char *ngram){
+inline void addNgram(TrieNode* node, const char *ngram){
     TrieMap::iterator temp;
     TrieNode *newNode;
     for (const char *it = ngram; *it; ){
@@ -53,7 +91,7 @@ void addNgram(TrieNode* node, const char *ngram){
     node->ts = 0;
 }
 
-void delNgram(TrieNode *node, const char *ngram){
+inline void delNgram(TrieNode *node, const char *ngram){
     TrieMap::iterator temp;
     TrieNode *next;
     const char *it;
@@ -117,7 +155,7 @@ void delNgram(TrieNode *node, const char *ngram){
     freeTrieNode(node);
 }
 
-void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
+inline void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
     TrieMap::iterator temp;
     unsigned int node_ts;
     cand_t cand;

@@ -6,14 +6,15 @@
 #include <pthread.h>
 #include <unistd.h>
 #include "util.h"
-#include "trie.h"
+#include "trie.hpp"
 #include "thread_struct.h"
 
 //#define DBG_TS
 //#define DBG_LOG
+//
 
 #define NUM_THREAD 37
-//#define NEXT_RESERVE 4096
+//#define NEXT_RESERVE 1
 #define RES_RESERVE 128
 #define BUF_RESERVE 1024*1024
 #define NUM_BUF_RESERVE 10000
@@ -28,8 +29,8 @@ pthread_t threads[NUM_THREAD];
 ThrArg args[NUM_THREAD];
 
 unsigned int ts = 0;
-unsigned int started[NUM_THREAD][16];
-unsigned int finished[NUM_THREAD][16];
+unsigned int started[NUM_THREAD];
+unsigned int finished[NUM_THREAD];
 std::vector<cand_t> res[NUM_THREAD];
 std::string tasks[MAX_BATCH_SIZE];
 int tp;
@@ -46,12 +47,14 @@ void *thread_main(void *arg){
     std::vector<cand_t> *my_res = &res[tid];
     const char *op;
     my_res->reserve(RES_RESERVE);
-    //my_trie->next.reserve(NEXT_RESERVE);
+#ifdef NEXT_RESERVE
+    my_trie->next.reserve(NEXT_RESERVE);
+#endif
     __sync_synchronize();
     __sync_fetch_and_add(&sync_val, 1);
     while(1){
         if (myqueue->head == myqueue->tail){
-            if (started[tid][0] >= ts){
+            if (started[tid] >= ts){
                 my_yield();
                 continue;
             }
@@ -66,7 +69,7 @@ void *thread_main(void *arg){
                 if (end-query_str > size_query)
                     end = query_str + size_query;
                 myqueue->head = myqueue->tail = 0;
-                started[tid][0]++;
+                started[tid]++;
                 my_res->clear();
                 __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){
@@ -74,12 +77,12 @@ void *thread_main(void *arg){
                     if (c == end)
                         break;
                     int hval = my_hash(*c);
-                    while(started[hval][0] != ts)
+                    while(started[hval] != ts)
                         my_yield();
                     queryNgram(my_res, my_sign, &trie[hval], c);
                 }
                 __sync_synchronize(); //Prevent Code Relocation
-                finished[tid][0]++;
+                finished[tid]++;
                 continue;
             }
         }
@@ -117,6 +120,25 @@ void input(){
     }
 }
 
+inline void print(){
+    bool print_answer = false;
+    for (int i = 0; i < NUM_THREAD; i++){
+        while(finished[i] != ts) my_yield();
+        unsigned int my_ts = my_sign(ts, i);
+        for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
+            if (it->from->ts == my_ts){
+                if (print_answer)
+                    std::cout << "|";
+                print_answer = true;
+                std::cout.write(it->start, it->size);
+            }
+        }
+    }
+    if (!print_answer)
+        std::cout << -1;
+    std::cout << std::endl;
+}
+
 void workload(){
     for (int i = 0; i < NUM_BUF_RESERVE; i++){
         tasks[i].reserve(BUF_RESERVE);
@@ -149,28 +171,13 @@ void workload(){
             __sync_synchronize(); //Prevent Code Relocation
             ts++;
             __sync_synchronize(); //Prevent Code Relocation
-            bool print_answer = false;
-            for (int i = 0; i < NUM_THREAD; i++){
-                while(finished[i][0] != ts) my_yield();
-                unsigned int my_ts = my_sign(ts, i);
-                for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
-                    if (it->from->ts == my_ts){
-                        if (print_answer)
-                            std::cout << "|";
-                        print_answer = true;
-                        std::cout.write(it->start, it->size);
-                    }
-                }
-            }
-            if (!print_answer)
-                std::cout << -1;
-            std::cout << std::endl;
+            print();
             tp = -1;
             if (unlikely(ts >= MAX_TS)){
                 ts = 0;
                 for (int i = 0; i < NUM_THREAD; i++){
                     touchTrie(&trie[i]);
-                    started[i][0] = finished[i][0] = 0;
+                    started[i] = finished[i] = 0;
                 }
             }
         }
@@ -181,13 +188,13 @@ void workload(){
             ts++;
             __sync_synchronize(); //Prevent Code Relocation
             for (int i = 0; i < NUM_THREAD; i++)
-                while(finished[i][0] != ts) my_yield();
+                while(finished[i] != ts) my_yield();
             tp = 0;
             if (unlikely(ts >= MAX_TS)){
                 ts = 0;
                 for (int i = 0; i < NUM_THREAD; i++){
                     touchTrie(&trie[i]);
-                    started[i][0] = finished[i][0] = 0;
+                    started[i] = finished[i] = 0;
                 }
             }
         }
