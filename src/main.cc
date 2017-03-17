@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
+#include "util.h"
 #include "trie.h"
 #include "thread_struct.h"
 
@@ -37,20 +38,6 @@ int tp;
 const char *query_str;
 int size_query;
 int sync_val;
-
-//http://stackoverflow.com/questions/1407786/how-to-set-cpu-affinity-of-a-particular-pthread
-int stick_to_core(int core_id) {
-   int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-   if (core_id < 0 || core_id >= num_cores)
-      return EINVAL;
-
-   cpu_set_t cpuset;
-   CPU_ZERO(&cpuset);
-   CPU_SET(core_id, &cpuset);
-
-   pthread_t current_thread = pthread_self();    
-   return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
-}
 
 void *thread_main(void *arg){
     ThrArg *myqueue = (ThrArg*)arg;
@@ -205,6 +192,8 @@ int main(int argc, char *argv[]){
 #ifdef DBG_LOG
     std::cerr<<"workload done" << std::endl;
 #endif
+/*
+// Not use when we remove global_flag
     destroyThread();
 #ifdef DBG_LOG
     std::cerr<<"destroyThread done" << std::endl;
@@ -214,5 +203,6 @@ int main(int argc, char *argv[]){
 #ifdef DBG_LOG
     std::cerr<<"destroyTrie done" << std::endl;
 #endif
+*/
     return 0;
 }
