@@ -34,8 +34,6 @@ unsigned int finished[NUM_THREAD];
 std::vector<cand_t> res[NUM_THREAD];
 std::string tasks[MAX_BATCH_SIZE];
 int tp;
-const char *query_str;
-int size_query;
 int sync_val;
 
 void *thread_main(void *arg){
@@ -62,12 +60,12 @@ void *thread_main(void *arg){
                 __sync_synchronize(); //Load Memory barrier
                 if (myqueue->head != myqueue->tail) continue;
                 __sync_synchronize(); //Prevent Code Relocation
-                int size = 1 + (size_query-1) / NUM_THREAD;
+                int size = 1 + ((tasks[tp].size()-1) -1) / NUM_THREAD;
                 int my_sign = my_sign(ts, tid);
-                const char *start = query_str + size * tid;
+                const char *start = &tasks[tp][2] + size * tid;
                 const char *end = start + size;
-                if (end-query_str > size_query)
-                    end = query_str + size_query;
+                if (end > &tasks[tp][0] + tasks[tp].size())
+                    end = &tasks[tp][0] + tasks[tp].size();
                 myqueue->head = myqueue->tail = 0;
                 started[tid]++;
                 my_res->clear();
@@ -166,9 +164,7 @@ void workload(){
 #ifdef DBG_TS
             std::cerr << ts << std::endl;
 #endif
-            query_str = &tasks[tp][2];
-            size_query = tasks[tp].size()-2;
-            __sync_synchronize(); //Prevent Code Relocation
+            __sync_synchronize(); //Store Memory barrier
             ts++;
             __sync_synchronize(); //Prevent Code Relocation
             print();
@@ -181,9 +177,8 @@ void workload(){
                 }
             }
         }
-        if (unlikely(++tp >= MAX_BATCH_SIZE)){
-            query_str = NULL;
-            size_query = 0;
+        if (unlikely(++tp >= MAX_BATCH_SIZE-1)){
+            tasks[tp] = "Q ";
             __sync_synchronize(); //Prevent Code Relocation
             ts++;
             __sync_synchronize(); //Prevent Code Relocation
