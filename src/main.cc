@@ -13,14 +13,14 @@
 
 TrieNode trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
+unsigned int ts = 0;
 ThrArg args[NUM_THREAD];
 
-unsigned int ts = 0;
 unsigned int started[NUM_THREAD];
 unsigned int finished[NUM_THREAD];
 std::vector<cand_t> res[NUM_THREAD];
 std::string tasks[MAX_BATCH_SIZE];
-int tp;
+int tp; //can be -1 so do not define as unsigned
 int sync_val;
 
 void *thread_main(void *arg){
@@ -48,12 +48,15 @@ void *thread_main(void *arg){
                 if (myqueue->head != myqueue->tail) continue;
                 __sync_synchronize(); //Prevent Code Relocation
                 started[tid]++;
-                int size = 1 + ((((int)tasks[tp].size())-2) -1) / NUM_THREAD;
+                const char *query_str = &tasks[tp][2];
+                int size_query = (int)tasks[tp].size()-2;
+
+                int size = 1 + (size_query -1) / NUM_THREAD;
                 int my_sign = my_sign(ts, tid);
-                const char *start = &tasks[tp][2] + size * tid;
+                const char *start = query_str + size * tid;
                 const char *end = start + size;
-                if (end > &tasks[tp][0] + tasks[tp].size())
-                    end = &tasks[tp][0] + tasks[tp].size();
+                if (end-query_str > size_query)
+                    end = query_str + size_query;
                 myqueue->head = myqueue->tail = 0;
                 my_res->clear();
                 __sync_synchronize(); //Prevent Code Relocation
