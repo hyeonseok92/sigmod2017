@@ -159,7 +159,7 @@ void workload(){
         my_yield();
     printf("R\n");
     fflush(stdout);
-    while(!std::cin.eof()){
+    while(1){
         std::getline(std::cin, tasks[tp]);
         if (tasks[tp][0] == 'F'){
             fflush(stdout);
