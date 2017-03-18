@@ -6,23 +6,10 @@
 #include <pthread.h>
 #include <unistd.h>
 #include "util.h"
+#include "config.h"
 #include "trie.hpp"
 #include "thread_struct.h"
 
-//#define DBG_TS
-//#define DBG_LOG
-//
-
-#define NUM_THREAD 37
-//#define NEXT_RESERVE 1
-#define RES_RESERVE 128
-#define BUF_RESERVE 1024*1024
-#define NUM_BUF_RESERVE 10000
-
-#define MAX_TS 0x3FFFFFF //because my_sign use 6 shifted ts
-#define my_hash(x) (((mbyte_t)(x))%NUM_THREAD)
-#define my_sign(ts, tid) (((ts) << 6) | (NUM_THREAD-tid))
-#define my_yield() __sync_synchronize()//pthread_yield()
 
 TrieNode trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
@@ -60,14 +47,14 @@ void *thread_main(void *arg){
                 __sync_synchronize(); //Load Memory barrier
                 if (myqueue->head != myqueue->tail) continue;
                 __sync_synchronize(); //Prevent Code Relocation
-                int size = 1 + ((tasks[tp].size()-1) -1) / NUM_THREAD;
+                started[tid]++;
+                int size = 1 + ((((int)tasks[tp].size())-2) -1) / NUM_THREAD;
                 int my_sign = my_sign(ts, tid);
                 const char *start = &tasks[tp][2] + size * tid;
                 const char *end = start + size;
                 if (end > &tasks[tp][0] + tasks[tp].size())
                     end = &tasks[tp][0] + tasks[tp].size();
                 myqueue->head = myqueue->tail = 0;
-                started[tid]++;
                 my_res->clear();
                 __sync_synchronize(); //Prevent Code Relocation
                 for(const char *c = start; c < end; c++){

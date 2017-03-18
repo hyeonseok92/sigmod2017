@@ -1,18 +1,9 @@
 #pragma once
 #include <jemalloc/jemalloc.h>
 #include <iostream>
-//#include <map>
-#include <unordered_map>
 #include <vector>
+#include "config.h"
 
-typedef unsigned int mbyte_t;
-//typedef unsigned short mbyte_t;
-//typedef unsigned char mbyte_t;
-#define MBYTE_SIZE sizeof(mbyte_t)
-
-struct TrieNode;
-//typedef std::map<mbyte_t, TrieNode*> TrieMap;
-typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
 struct TrieNode{
     unsigned int ts;
     mbyte_t cache_ch;
@@ -26,7 +17,7 @@ struct cand_t{
     int size;
 };
 
-#define USE_CALLOC
+#define MBYTE_SIZE sizeof(mbyte_t)
 
 #ifdef USE_CALLOC
 #define newTrieNode(x) do{\
