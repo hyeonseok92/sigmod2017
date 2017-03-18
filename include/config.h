@@ -22,7 +22,7 @@ typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
 //#define NEXT_RESERVE 1
 #define RES_RESERVE 128
 #define BUF_RESERVE 1024*1024
-#define NUM_BUF_RESERVE 1
+#define NUM_BUF_RESERVE 10000
 
 #define my_hash(x) (((mbyte_t)(x))%NUM_THREAD)
 #define my_sign(ts, tid) (((ts) << 6) | (NUM_THREAD-tid))
