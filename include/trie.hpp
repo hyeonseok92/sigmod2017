@@ -53,10 +53,10 @@ struct cand_t{
 
 #define NOT_NGRAM 0xFFFFFFFF
 
-inline void addNgram(TrieNode* node, const char *ngram){
+inline void addNgram(TrieNode* node, const char *it){
     TrieMap::iterator temp;
     TrieNode *newNode;
-    for (const char *it = ngram; *it; ){
+    while(*it){
         mbyte_t key = 0;
         for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
             key += (((mbyte_t)*it) << (i*8));
@@ -86,18 +86,17 @@ inline void addNgram(TrieNode* node, const char *ngram){
     node->ts = 0;
 }
 
-inline void delNgram(TrieNode *node, const char *ngram){
+inline void delNgram(TrieNode *node, const char *it){
     TrieMap::iterator temp;
     TrieNode *next;
-    const char *it;
-    TrieNode *last_branch = node;
-    TrieMap::iterator last_branch_next = node->next.find(*ngram);
-
-    for (it = ngram; *it; ){
+    TrieNode *last_branch;
+    TrieMap::iterator last_branch_next;
+    mbyte_t key = 0;
+    while(*it){
         if (node->cache_ch == 0)
             return;
 
-        mbyte_t key = 0;
+        key = 0;
         for (unsigned int i = 0; i < MBYTE_SIZE && *it; i++, it++)
             key += ((mbyte_t)(*it) << (i*8));
 
