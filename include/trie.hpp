@@ -33,17 +33,21 @@ struct cand_t{
 #define freeTrieNode(x) delete (x)
 #endif
 
-#define TRY_SIGN(node) do{\
-    node_ts = (node)->ts;\
-    while (node_ts < my_ts){\
-        if (__sync_bool_compare_and_swap(&(node)->ts, node_ts, my_ts)){\
-            cand.from = (node);\
-            cand.start = query;\
-            cand.size = (it - query)+1;\
-            cands->emplace_back(cand);\
-            break;\
+#define TRY_SIGN(node, my_ts, cands, s, e) do{\
+    if ((node)->ts < my_ts){\
+        TrieNode *target = (node);\
+        unsigned int node_ts = (node)->ts;\
+        while (node_ts < my_ts){\
+            if (__sync_bool_compare_and_swap(&target->ts, node_ts, my_ts)){\
+                cand_t cand;\
+                cand.from = target;\
+                cand.start = s;\
+                cand.size = (e-s)+1;\
+                cands->emplace_back(cand);\
+                break;\
+            }\
+            node_ts = (node)->ts;\
         }\
-        node_ts = (node)->ts;\
     }\
 }while(0)
 
@@ -148,8 +152,6 @@ inline void delNgram(TrieNode *node, const char *ngram){
 
 inline void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
     TrieMap::iterator temp;
-    unsigned int node_ts;
-    cand_t cand;
     const char *it = query;
     while(*it){
         if (node->cache_ch == 0)
@@ -161,13 +163,13 @@ inline void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode*
                 if (node->cache_ch == 0)
                     continue;
                 if (node->cache_ch == key){
-                    TRY_SIGN(node->cache_next);
+                    TRY_SIGN(node->cache_next, my_ts, cands, query, it);
                     continue;
                 }
 
                 temp = node->next.find(key);
                 if (temp != node->next.end())
-                    TRY_SIGN(temp->second);
+                    TRY_SIGN(temp->second, my_ts, cands, query, it);
             }
         }
         if (node->cache_ch == key){
@@ -181,7 +183,7 @@ inline void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode*
         node = temp->second;
     }
     it--;
-    TRY_SIGN(node);
+    TRY_SIGN(node, my_ts, cands, query, it);
 }
 
 void touchTrie(TrieNode* node){
