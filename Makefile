@@ -8,8 +8,8 @@ SRCEXT := cc
 SOURCES := $(shell find $(SRCDIR) -type f -name *.$(SRCEXT))
 OBJECTS := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.o))
 DBG_OBJECTS := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.dbg.o))
-CFLAGS := -Wall -O3 -std=c++11 -D NDEBUG 
-DBGCFLAGS := -Wall -O0 -std=c++11 -g
+CFLAGS := -Wall -O3 -std=c++0x -D NDEBUG 
+DBGCFLAGS := -Wall -O0 -std=c++0x -g
 LIB := -lpthread -ljemalloc -L lib
 INC := -I include
 
