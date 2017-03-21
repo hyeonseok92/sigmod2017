@@ -2,12 +2,10 @@
 //#include <map>
 #include <unordered_map>
 
-typedef unsigned int mbyte_t;
-//typedef unsigned short mbyte_t;
-//typedef unsigned char mbyte_t;
 
 struct TrieNode;
 
+typedef unsigned long long int mbyte_t;
 //typedef std::map<mbyte_t, TrieNode*> TrieMap;
 typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
 

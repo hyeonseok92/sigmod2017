@@ -5,14 +5,14 @@
 #include "config.h"
 
 struct TrieNode{
-    unsigned int ts;
     mbyte_t cache_ch;
-    TrieNode *cache_next;
+    unsigned long long int cache_next;
     TrieMap next;
+    unsigned int sign;
 };
 
 struct cand_t{
-    TrieNode *from;
+    unsigned int *from;
     const char *start;
     int size;
 };
@@ -29,29 +29,40 @@ struct cand_t{
 #define newTrieNode(x) do{\
     (x) = new TrieNode;\
     (x)->cache_ch = 0;\
+    (x)->cache_next = 0;\
 }while(0)
 #define freeTrieNode(x) delete (x)
 #endif
 
-#define TRY_SIGN(node, my_ts, cands, s, e) do{\
-    if ((node)->ts < my_ts){\
-        TrieNode *target = (node);\
-        unsigned int node_ts = (node)->ts;\
-        while (node_ts < my_ts){\
-            if (__sync_bool_compare_and_swap(&target->ts, node_ts, my_ts)){\
+#define BIT_NGRAM 0x8000000000000000ULL
+
+#define IS_NGRAM(x) ((x)->cache_next & BIT_NGRAM)
+#define SET_NGRAM(x) do{\
+    (x)->cache_next |= BIT_NGRAM;\
+    (x)->sign = 0;\
+}while(0)
+#define GET_CACHE_NEXT(x) ((TrieNode*)((x)->cache_next & ~BIT_NGRAM))
+#define CLEAR_NGRAM(x) do{\
+    (x)->cache_next &= ~BIT_NGRAM;\
+}while(0)
+
+#define TRY_SIGN(node, my_sign, cands, s, e) do{\
+    TrieNode *target = (node);\
+    if (IS_NGRAM(target) && target->sign < my_sign){\
+        unsigned int node_sign = target->sign;\
+        while (node_sign < my_sign){\
+            if (__sync_bool_compare_and_swap(&target->sign, node_sign, my_sign)){\
                 cand_t cand;\
-                cand.from = target;\
+                cand.from = &target->sign;\
                 cand.start = s;\
                 cand.size = (e-s)+1;\
                 cands->emplace_back(cand);\
                 break;\
             }\
-            node_ts = (node)->ts;\
+            node_sign = target->sign;\
         }\
     }\
 }while(0)
-
-#define NOT_NGRAM 0xFFFFFFFF
 
 inline void addNgram(TrieNode* node, const char *it){
     TrieMap::iterator temp;
@@ -63,27 +74,25 @@ inline void addNgram(TrieNode* node, const char *it){
 
         if (node->cache_ch == 0){
             newTrieNode(newNode);
-            newNode->ts = NOT_NGRAM;
             node->cache_ch = key;
-            node->cache_next = newNode;
+            node->cache_next = IS_NGRAM(node) | (unsigned long long int)newNode;
             node = newNode;
             continue;
         }
         if (node->cache_ch == key){
-            node = node->cache_next;
+            node = GET_CACHE_NEXT(node);
             continue;
         }
         temp = node->next.find(key);
         if (temp == node->next.end()){
             newTrieNode(newNode);
-            newNode->ts = NOT_NGRAM;
             node->next[key] = newNode;
             node = newNode;
         }
         else
             node = temp->second;
     }
-    node->ts = 0;
+    SET_NGRAM(node);
 }
 
 inline void delNgram(TrieNode *node, const char *it){
@@ -101,8 +110,8 @@ inline void delNgram(TrieNode *node, const char *it){
             key += ((mbyte_t)(*it) << (i*8));
 
         if (node->cache_ch == key){
-            next = node->cache_next;
-            if (node->ts != NOT_NGRAM || (node->next.size() && !next->next.size())){
+            next = GET_CACHE_NEXT(node);
+            if (IS_NGRAM(node) || (node->next.size() && !next->next.size())){
                 last_branch = node;
                 last_branch_next = node->next.end();
             }
@@ -115,7 +124,7 @@ inline void delNgram(TrieNode *node, const char *it){
             return;
         next = temp->second;
         //If this is the end of a ngram or this node have more than 1 child node, and next have less than 2 child node
-        if (node->ts != NOT_NGRAM || (node->next.size() && !next->next.size())){ 
+        if (IS_NGRAM(node) || (node->next.size() && !next->next.size())){ 
             last_branch = node;
             last_branch_next = temp;
         }
@@ -123,14 +132,15 @@ inline void delNgram(TrieNode *node, const char *it){
     }
 
     if (node->cache_ch){ //If there is more than 1 child node
-        node->ts = NOT_NGRAM;
+        CLEAR_NGRAM(node);
         return;
     }
     if (last_branch_next == last_branch->next.end()){
-        node = last_branch->cache_next;
+        node = GET_CACHE_NEXT(last_branch);
         if (last_branch->next.size()){
             last_branch->cache_ch = last_branch->next.begin()->first;
-            last_branch->cache_next = last_branch->next.begin()->second;
+            last_branch->cache_next = IS_NGRAM(last_branch) |
+                    (unsigned long long int) last_branch->next.begin()->second;
             last_branch->next.erase(last_branch->next.begin());
         }
         else
@@ -142,14 +152,14 @@ inline void delNgram(TrieNode *node, const char *it){
     }
 
     while(node->cache_ch){ //If there is more than 1 child node
-        next = node->cache_next;
+        next = GET_CACHE_NEXT(node);
         freeTrieNode(node);
         node = next;
     }
     freeTrieNode(node);
 }
 
-inline void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode* node, const char *query){
+inline void queryNgram(std::vector<cand_t> *cands, unsigned int my_sign, TrieNode* node, const char *query){
     TrieMap::iterator temp;
     const char *it = query;
     while(*it){
@@ -162,17 +172,17 @@ inline void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode*
                 if (node->cache_ch == 0)
                     continue;
                 if (node->cache_ch == key){
-                    TRY_SIGN(node->cache_next, my_ts, cands, query, it);
+                    TRY_SIGN(GET_CACHE_NEXT(node), my_sign, cands, query, it);
                     continue;
                 }
 
                 temp = node->next.find(key);
                 if (temp != node->next.end())
-                    TRY_SIGN(temp->second, my_ts, cands, query, it);
+                    TRY_SIGN(temp->second, my_sign, cands, query, it);
             }
         }
         if (node->cache_ch == key){
-            node = node->cache_next;
+            node = GET_CACHE_NEXT(node);
             continue;
         }
 
@@ -182,15 +192,15 @@ inline void queryNgram(std::vector<cand_t> *cands, unsigned int my_ts, TrieNode*
         node = temp->second;
     }
     it--;
-    TRY_SIGN(node, my_ts, cands, query, it);
+    TRY_SIGN(node, my_sign, cands, query, it);
 }
 
 void touchTrie(TrieNode* node){
-    if (node->ts != NOT_NGRAM)
-        node->ts = 0;
+    if (IS_NGRAM(node))
+        node->sign = 0;
     if (node->cache_ch == 0)
         return;
-    touchTrie(node->cache_next);
+    touchTrie(GET_CACHE_NEXT(node));
     for (TrieMap::iterator it = node->next.begin(); it !=  node->next.end(); it++){
         touchTrie(it->second);
     }

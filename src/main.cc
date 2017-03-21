@@ -10,7 +10,6 @@
 #include "trie.hpp"
 #include "thread_struct.h"
 
-
 TrieNode trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
 unsigned int ts = 0;
@@ -112,9 +111,9 @@ inline void print(){
     bool print_answer = false;
     for (int i = 0; i < NUM_THREAD; i++){
         while(finished[i] != ts) my_yield();
-        unsigned int my_ts = my_sign(ts, i);
+        unsigned int my_sign = my_sign(ts, i);
         for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
-            if (it->from->ts == my_ts){
+            if (*(it->from) == my_sign){
                 if (print_answer)
                     std::cout << "|";
                 print_answer = true;
