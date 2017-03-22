@@ -1,8 +1,6 @@
 #include <iostream>
 #include <string.h>
 #include <vector>
-#include <unordered_set>
-#include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
 #include "util.h"
@@ -193,17 +191,5 @@ int main(int argc, char *argv[]){
     initThread();
     input();
     workload();
-/*
-// Not use when we remove global_flag
-    destroyThread();
-#ifdef DBG_LOG
-    std::cerr<<"destroyThread done" << std::endl;
-#endif
-    for (int i = 0; i < NUM_THREAD; i++)
-        destroyTrie(&trie[i]);
-#ifdef DBG_LOG
-    std::cerr<<"destroyTrie done" << std::endl;
-#endif
-*/
     return 0;
 }
