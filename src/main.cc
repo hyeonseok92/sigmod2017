@@ -46,6 +46,7 @@ void *thread_main(void *arg){
     TrieNode *my_trie = &trie[tid];
     std::vector<mtask_t> *my_mtasks = mtasks[tid];
     std::vector<res_t> *my_res = &res[tid];
+    std::vector<unsigned int*> backups;
     __sync_fetch_and_add(&sync_val, 1);
 
     while(1){
@@ -125,12 +126,22 @@ void *thread_main(void *arg){
                 else if(*op == 'D')//Add / Del
                     delNgram(my_trie, op+2);
                 else //Query
-                    queryNgram(my_res, best->task_id, my_trie, op);
+                    queryNgram(my_res, &backups, best->task_id, my_trie, op);
             }
             __sync_synchronize();
             __sync_fetch_and_add(&sync_val, 1);
+            for (int i = 0; i < NUM_THREAD; i++)
+                my_mtasks[i].clear();
+
+            //Clear the last_task_id
+            for (std::vector<unsigned int*>::iterator it = backups.begin(); it!= backups.end(); it++)
+                **it = 0;
+            backups.clear();
+
             while(global_flag == FLAG_PROC)
                 my_yield();
+
+            my_res->clear();
         }
     }
     pthread_exit((void*)NULL);
@@ -256,6 +267,7 @@ void workload(){
                 exit(0);
             preproc_tp = 1;
             proc_tp = 1;
+            q_task_ids.clear();
             __sync_synchronize();
             global_flag = FLAG_SCAN;
         }
