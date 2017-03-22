@@ -1,30 +1,39 @@
-1. 
-DVA
-2.
-Hyeonseok Oh, hyeonso5@gmail.com, Hanyang University, Republic of Korea, Department of Computer Science, Master's study program
-Jongbin Kim, mrbin20022@gmail.com, Hanyang University, Republic of Korea, Department of Computer Science, Master's study program
-3.
-Hyungsoo Jung
-4.
-1) We used Trie data structure to store ngrams and search ngrams from documents.
-2) There is Main thread which process input and output, and there are 37 threads which manage the separate trie and process the queries.
-2-1) Role of Main thread
-  - When Main thread gets a add or delete command, Main determine who must process this command by hash and push the query in the queue of the thread in charge.
-  - When Main thread gets a query command, Main broadcasts the query to all worker thread. And Main waits for all worker thread to finish their partition. After all worker threads finished, Main print the query result
-2-2) Role of Worker threads
-  - When Worker thread gets a add or delete command from his queue, the Worker thread add or delete the ngram at his own trie.
-  - Worker thread must do all the work in the queue before processing the next query command.
-  - When the queue is empty and there is a query command, Worker thread calculate their searching boundary by tid and find all ngrams in the boundary
+1. Team Name 
+- DVA
 
-3) We did many optimization to improve the performance
-3-1) Remove duplicate ngrams by atomic compare and swap
-3-2) 64byte sized Node to maximize cache performance
-3-3) use in-node cache to improve when the number of child node is one.
-3-4) fine grained timestamp to maximize concurrency when processing query
+2. Team Members
+- Hyeonseok Oh, hyeonso5@gmail.com, Hanyang University, Department of Computer Science, MS
+- Jongbin Kim, mrbin20022@gmail.com, Hanyang University, Department of Computer Science, MS
 
+3. Advisor/Supervisor
+- Hyungsoo Jung, hyungsoo.jung@gmail.com, Hanyang University, Department of Computer Science, Assist. Prof.
 
-2)There are one main thread 
-2)We concentrated in cache line optimization
+4. Brief Description
+- We used "Trie" data structure to store N-grams of input words.
 
+- There is a main thread which process input and output, and 
+  there are 37 worker threads which manage the separate trie and process the queries.
 
-5.
+- There are one main thread and 37 worker threads running in this program.
+  Also, there are 37 trie data structure to store the set of N-grams seperately
+  during pre-processing input. Hashing the first character is used for seperation.
+
+- Main thread processes the three types of operations in two ways : 
+  (1) If main thread gets 'Q'/query oepration, it broadcasts the query to 37 worker threads,
+      waits for all worker threads to finish their job, and prints out the result of the query.
+  (2) If main thread gets 'A'/add or 'D'/delete operation, it determines which worker thread
+      should handle this operation and enqueues the query to the queue of selected worker thread.
+  
+- Worker thread dequeues the operation from its queue, and modifies its trie by adding/deleting
+  the N-gram if the operation is 'A'/add or 'D'/delete. If the queue is empty and the query
+  broadcast was arrived, then worker thread splits N-grams from the query text and searches its
+  assigned N-grams from the trie.
+      
+- We used some optimization techniques :
+ (1) Remove duplicated N-grams by compare-and-swap.
+ (2) Set fixed 64 Bytes as the size of one trie node for cache line optimization.
+ (3) Trie node has a caching node for fast lookup when the number of child node is one. 
+ (4) Use fine grained timestamp to maximize concurrency when processing 'Q'/query.
+
+5. Third Party Code
+- C++ stl (standard template library)
