@@ -5,23 +5,41 @@
 #include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <queue>
 #include "util.h"
 #include "config.h"
 #include "trie.hpp"
 #include "thread_struct.h"
 
-
 TrieNode trie[NUM_THREAD];
 pthread_t threads[NUM_THREAD];
+std::vector<mtask_t> mtasks[NUM_THREAD][NUM_THREAD];
 unsigned int ts = 0;
 ThrArg args[NUM_THREAD];
 
-unsigned int started[NUM_THREAD];
-unsigned int finished[NUM_THREAD];
-std::vector<cand_t> res[NUM_THREAD];
 std::string tasks[MAX_BATCH_SIZE];
-int tp; //can be -1 so do not define as unsigned
+char delimiter_chk[MAX_BATCH_SIZE];
+
+std::vector<res_t> res[NUM_THREAD];
+
+int tp;
+int preproc_tp;
+int proc_tp;
+int global_flag;
 int sync_val;
+
+#define FLAG_IDLE 0
+#define FLAG_SCAN 1
+#define FLAG_PREPROC 2
+#define FLAG_PROC 3
+#define FLAG_END 4
+
+inline mbyte_t get_key(const char *c){
+    mbyte_t key = 0;
+    for (unsigned int i = 0; i < MBYTE_SIZE && *c; ++i, ++c)
+        key |= (((mbyte_t)*c) << (i*8));
+    return key;
+}
 
 void *thread_main(void *arg){
     ThrArg *myqueue = (ThrArg*)arg;
@@ -29,58 +47,90 @@ void *thread_main(void *arg){
     stick_to_core(tid+1);
     my_yield();
     TrieNode *my_trie = &trie[tid];
-    std::vector<cand_t> *my_res = &res[tid];
-    const char *op;
-    my_res->reserve(RES_RESERVE);
-#ifdef NEXT_RESERVE
-    my_trie->next.reserve(NEXT_RESERVE);
-#endif
-    __sync_synchronize();
+    std::vector<mtask_t> *my_mtasks = mtasks[tid];
+    std::vector<res_t> *my_res = &res[tid];
     __sync_fetch_and_add(&sync_val, 1);
+
     while(1){
-        if (myqueue->head == myqueue->tail){
-            if (started[tid] >= ts){
-                my_yield();
+        if (global_flag == FLAG_SCAN || global_flag == FLAG_PREPROC){
+            int my_tp = __sync_fetch_and_add(&preproc_tp, 1);
+            while(my_tp >= tp && global_flag != FLAG_PROC) my_yield();
+            if (my_tp >= tp && global_flag == FLAG_PROC)
                 continue;
+
+            mtask_t mtask;
+            mtask.task_id = my_tp;
+
+            //Add / Delete
+            if (tasks[my_tp][0] != 'Q'){
+                mtask.offset = 0;
+                mtasks[my_hash(get_key(&tasks[my_tp][2]))][tid].emplace_back(mtask);
             }
             else{
-                __sync_synchronize(); //Load Memory barrier
-                if (myqueue->head != myqueue->tail) continue;
-                __sync_synchronize(); //Prevent Code Relocation
-                started[tid]++;
-                const char *query_str = &tasks[tp][2];
-                int size_query = (int)tasks[tp].size()-2;
+                //Query
+                const char *start = &tasks[my_tp][0];
+                for (const char *it = start+2;; it++){
+                    while(*(it-1) != ' ' && *it) it++;
+                    if (!(*it)) break;
 
-                int size = 1 + (size_query -1) / NUM_THREAD;
-                int my_sign = my_sign(ts, tid);
-                const char *start = query_str + size * tid;
-                const char *end = start + size;
-                if (end-query_str > size_query)
-                    end = query_str + size_query;
-                myqueue->head = myqueue->tail = 0;
-                my_res->clear();
-                __sync_synchronize(); //Prevent Code Relocation
-                for(const char *c = start; c < end; c++){
-                    while(c != end && *(c-1) != ' ') c++;
-                    if (c == end)
-                        break;
-                    int hval = my_hash(*c);
-                    while(started[hval] != ts)
-                        my_yield();
-                    queryNgram(my_res, my_sign, &trie[hval], c);
+                    mbyte_t key = 0;
+                    mtask.offset = it - start;
+                    const char *c = it;
+
+                    for (unsigned int i = 0; i < MBYTE_SIZE && *c; ++i, ++c){
+                        key |= (((mbyte_t)*c) << (i*8));
+                        if (*(c+1) == ' '){
+                            std::vector<mtask_t> *tmp = &mtasks[my_hash(key)][tid];
+                            if (!tmp->size() ||
+                                tmp->rbegin()->task_id != mtask.task_id ||
+                                tmp->rbegin()->offset != mtask.offset)
+                            //We don't need to input duplicate mtask
+                            tmp->emplace_back(mtask);
+                        }
+                    }
+                    std::vector<mtask_t> *tmp = &mtasks[my_hash(key)][tid];
+                    if (!tmp->size() ||
+                        tmp->rbegin()->task_id != mtask.task_id ||
+                        tmp->rbegin()->offset != mtask.offset)
+                        //We don't need to input duplicate mtask
+                        tmp->emplace_back(mtask);
                 }
-                __sync_synchronize(); //Prevent Code Relocation
-                finished[tid]++;
-                continue;
             }
+            __sync_fetch_and_add(&proc_tp, 1);
         }
-        else{
-            op = myqueue->operations[myqueue->head++];
-            if (op[0] == 'A')
-                addNgram(my_trie, &op[2]);
-            else
-                delNgram(my_trie, &op[2]);
-            continue;
+        else if (global_flag == FLAG_PROC){
+            //std::vector<mtask_t>::const_iterator its[NUM_THREAD];
+            const mtask_t *its[NUM_THREAD];
+            for (int i = 0; i < NUM_THREAD; i++)
+                its[i] = &my_mtasks[i][0];
+
+            while(1){
+                const mtask_t *best = NULL;
+                int best_i = 0;
+                for (int i = 0; i < NUM_THREAD; i++){
+                    if (its[i] == &(*my_mtasks[i].rbegin())) //Terminated Result
+                        continue;
+
+                    if (best == NULL || best->task_id > its[i]->task_id ||
+                        (best->task_id == its[i]->task_id &&
+                        best->offset > its[i]->offset)){
+                        //task_id smaller first, offset smaller second
+                        best = &(*its[0]);
+                        best_i = i;
+                    }
+                }
+                if (best == NULL) break;
+                its[best_i]++;
+                const char *op = &tasks[best->task_id][best->offset];
+                if (*op == 'A') 
+                    addNgram(my_trie, op+2);
+                else if(*op == 'D')//Add / Del
+                    delNgram(my_trie, op+2);
+                else //Query
+                    queryNgram(my_res, best->task_id, my_trie, op);
+            }
+            while(global_flag != FLAG_PROC)
+                my_yield();
         }
     }
     pthread_exit((void*)NULL);
@@ -103,12 +153,14 @@ void input(){
         std::getline(std::cin, buf);
         if (buf.compare("S") == 0)
             break;
-        else
-            addNgram(&trie[my_hash(*buf.begin())], &buf[0]);
+        else{
+            addNgram(&trie[my_hash(get_key(&buf[0]))],&buf[0]);
+        }
     }
 }
 
 inline void print(){
+    /*
     bool print_answer = false;
     for (int i = 0; i < NUM_THREAD; i++){
         while(finished[i] != ts) my_yield();
@@ -125,68 +177,70 @@ inline void print(){
     if (!print_answer)
         std::cout << -1;
     std::cout << std::endl;
+    */
 }
-
-inline void chkOverflowTs(){
-    if (unlikely(ts >= MAX_TS)){
-        ts = 0;
-        for (int i = 0; i < NUM_THREAD; i++){
-            touchTrie(&trie[i]);
-            started[i] = finished[i] = 0;
-        }
-    }
-}
-
-inline void chkOverflowTp(){
-    if (unlikely(tp >= MAX_BATCH_SIZE-1)){
-        tasks[tp] = "Q ";
-        __sync_synchronize(); //Prevent Code Relocation
-        ts++;
-        __sync_synchronize(); //Prevent Code Relocation
-        for (int i = 0; i < NUM_THREAD; i++)
-            while(finished[i] != ts) my_yield();
-        tp = 0;
-        chkOverflowTs();
-    }
-}
-
 
 void workload(){
     for (int i = 0; i < NUM_BUF_RESERVE; i++){
         tasks[i].reserve(BUF_RESERVE);
     }
+    global_flag = FLAG_SCAN;
     while(sync_val != NUM_THREAD)
         my_yield();
     printf("R\n");
     fflush(stdout);
     while(1){
         std::getline(std::cin, tasks[tp]);
-        if (tasks[tp][0] == 'F'){
-            fflush(stdout);
-            std::getline(std::cin, tasks[tp]);
-            if (tasks[tp][0] == '\0'){
-                exit(0);
+        if (tasks[tp][0] == 'F' || tp >= MAX_BATCH_SIZE-1){
+            global_flag = FLAG_PREPROC;
+            sync_val = 0;
+            __sync_synchronize();
+            while(proc_tp != tp)
+                my_yield();
+
+            __sync_synchronize();
+            global_flag = FLAG_PROC;
+            __sync_synchronize();
+            while(sync_val != NUM_THREAD)
+                my_yield();
+            __sync_synchronize();
+
+            //std::vector<res_t>::const_iterator its[NUM_THREAD];
+            const res_t *its[NUM_THREAD];
+            for (int i = 0; i < NUM_THREAD; i++)
+                its[i] = &res[i][0];
+
+            while(1){
+                const res_t *best = NULL;
+                int best_i = 0;
+                for (int i = 0; i < NUM_THREAD; i++){
+                    if (its[i] == &(*res[i].rbegin()))
+                        continue;
+                    if (best == NULL || best->task_id > its[i]->task_id ||
+                        (best->task_id == its[i]->task_id && 
+                        (best->start > its[i]->start ||
+                        (best->start == its[i]->start && best->size > its[i]->size)))){
+                        //task_id smaller first, start smaller second, size smaller third
+                        best = &(*its[0]);
+                        best_i = i;
+                    }
+                }
+                if (best == NULL) break;
+                std::cout.write(best->start, best->size);
+                ++its[best_i];
             }
+            fflush(stdout);
+            tp = 0;
+            std::getline(std::cin, tasks[tp]);
+            if (tasks[tp][0] == '\0')
+                exit(0);
+            preproc_tp = 0;
+            proc_tp = 0;
+            __sync_synchronize();
+            global_flag = FLAG_SCAN;
         }
-        if (tasks[tp][0] != 'Q'){
-            ThrArg *worker = &args[my_hash(tasks[tp][2])];
-            worker->operations[worker->tail] = &tasks[tp][0];
-            __sync_synchronize(); //Prevent Code Relocation
-            ++worker->tail; // queue overflow is processed together when task overflow occured
-        }
-        else{
-#ifdef DBG_TS
-            std::cerr << ts << std::endl;
-#endif
-            __sync_synchronize(); //Store Memory barrier
-            ts++;
-            __sync_synchronize(); //Prevent Code Relocation
-            print();
-            tp = -1;
-            chkOverflowTs();
-        }
-        ++tp;
-        chkOverflowTp();
+        __sync_synchronize();
+        tp++;
     }
 }
 
