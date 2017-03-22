@@ -23,6 +23,7 @@ int preproc_tp __attribute__((aligned(0x40)));
 int proc_tp __attribute__((aligned(0x40)));
 int global_flag __attribute__((aligned(0x40)));
 int sync_val __attribute__((aligned(0x40)));
+int cnt_batch __attribute__((aligned(0x40)));
 
 #define FLAG_SCAN 0
 #define FLAG_PREPROC 1
@@ -100,6 +101,7 @@ void *thread_main(void *arg){
             __sync_synchronize();
         }
         else if (global_flag == FLAG_PROC){
+            int cur_batch = cnt_batch;
             std::vector<mtask_t>::const_iterator its[NUM_THREAD];
             for (int i = 0; i < NUM_THREAD; i++)
                 its[i] = my_mtasks[i].begin();
@@ -145,7 +147,7 @@ void *thread_main(void *arg){
 
             last_query_id = 0xFFFFFFFF;
 
-            while(global_flag == FLAG_PROC)
+            while(global_flag == FLAG_PROC && cur_batch == cnt_batch)
                 my_yield();
 
             my_res->clear();
@@ -199,6 +201,7 @@ void workload(){
                 __sync_synchronize();
                 tp++;
             }
+            cnt_batch++;
             global_flag = FLAG_PREPROC;
             sync_val = 0;
             __sync_synchronize();
