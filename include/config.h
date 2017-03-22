@@ -18,7 +18,7 @@ typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
 
 #define MTASK_RESERVE 1000000
 #define RES_RESERVE 1000000
-#define MAX_BATCH_SIZE 1000000
+#define MAX_BATCH_SIZE 2//10//10000000
 #define BUF_RESERVE 10000
 #define Q_ID_RESERVE 10000
 #define NUM_THREAD 38

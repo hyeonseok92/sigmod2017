@@ -11,25 +11,22 @@
 #include "trie.hpp"
 #include "thread_struct.h"
 
-TrieNode trie[NUM_THREAD];
-pthread_t threads[NUM_THREAD];
-std::vector<mtask_t> mtasks[NUM_THREAD][NUM_THREAD];
-unsigned int ts = 0;
-ThrArg args[NUM_THREAD];
+TrieNode trie[NUM_THREAD] __attribute__((aligned(0x40)));
+pthread_t threads[NUM_THREAD] __attribute__((aligned(0x40)));
+std::vector<mtask_t> mtasks[NUM_THREAD][NUM_THREAD] __attribute__((aligned(0x40)));
 
-std::string tasks[MAX_BATCH_SIZE];
-std::vector<res_t> res[NUM_THREAD];
+std::string tasks[MAX_BATCH_SIZE] __attribute__((aligned(0x40)));
+std::vector<res_t> res[NUM_THREAD] __attribute__((aligned(0x40)));
 
-int tp;
-int preproc_tp;
-int proc_tp;
-int global_flag;
-int sync_val;
+int tp  __attribute__((aligned(0x40)));
+int preproc_tp __attribute__((aligned(0x40)));
+int proc_tp __attribute__((aligned(0x40)));
+int global_flag __attribute__((aligned(0x40)));
+int sync_val __attribute__((aligned(0x40)));
 
 #define FLAG_SCAN 0
 #define FLAG_PREPROC 1
 #define FLAG_PROC 2
-#define FLAG_END 3
 
 inline mbyte_t get_key(const char *c){
     mbyte_t key = 0;
@@ -39,8 +36,7 @@ inline mbyte_t get_key(const char *c){
 }
 
 void *thread_main(void *arg){
-    ThrArg *myqueue = (ThrArg*)arg;
-    int tid = myqueue->tid;
+    int tid = (unsigned long long)arg;
     stick_to_core(tid+1);
     my_yield();
     TrieNode *my_trie = &trie[tid];
@@ -160,8 +156,7 @@ void *thread_main(void *arg){
 
 void initThread(){
     for (int i = 0; i < NUM_THREAD; i++){
-        args[i].tid = i;
-        pthread_create(&threads[i], NULL, &thread_main, (void *)&args[i]);
+        pthread_create(&threads[i], NULL, &thread_main, (void*)i);
     }
 }
 void destroyThread(){
@@ -183,7 +178,7 @@ void input(){
 
 void workload(){
     std::vector<unsigned int> q_task_ids;
-    for (int i = 0; i < MAX_BATCH_SIZE; i++){
+    for (int i = 0; i < MAX_BATCH_SIZE/10; i++){
         tasks[i].reserve(BUF_RESERVE);
     }
     q_task_ids.reserve(Q_ID_RESERVE);
@@ -200,6 +195,10 @@ void workload(){
             q_task_ids.emplace_back(tp);
 
         if (tasks[tp][0] == 'F' || tp >= MAX_BATCH_SIZE-1){
+            if (tp >= MAX_BATCH_SIZE-1){
+                __sync_synchronize();
+                tp++;
+            }
             global_flag = FLAG_PREPROC;
             sync_val = 0;
             __sync_synchronize();
