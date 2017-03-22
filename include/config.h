@@ -18,7 +18,7 @@ typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
 
 #define MAX_TS 0x3FFFFFF //because my_sign use 6 shifted ts
 #define MAX_BATCH_SIZE 1000000
-#define NUM_THREAD 37
+#define NUM_THREAD 18
 //#define NEXT_RESERVE 1
 #define RES_RESERVE 128
 #define BUF_RESERVE 1024*1024

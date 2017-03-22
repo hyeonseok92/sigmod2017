@@ -11,17 +11,17 @@
 #include "thread_struct.h"
 
 
-TrieNode trie[NUM_THREAD];
-pthread_t threads[NUM_THREAD];
-unsigned int ts = 0;
-ThrArg args[NUM_THREAD];
+TrieNode trie[NUM_THREAD] __attribute__((aligned(0x40)));
+pthread_t threads[NUM_THREAD] __attribute__((aligned(0x40)));
+unsigned int ts __attribute__((aligned(0x40)));
+ThrArg args[NUM_THREAD] __attribute__((aligned(0x40)));
 
-unsigned int started[NUM_THREAD];
-unsigned int finished[NUM_THREAD];
-std::vector<cand_t> res[NUM_THREAD];
-std::string tasks[MAX_BATCH_SIZE];
-int tp; //can be -1 so do not define as unsigned
-int sync_val;
+unsigned int started[NUM_THREAD]  __attribute__((aligned(0x40)));
+unsigned int finished[NUM_THREAD] __attribute__((aligned(0x40)));
+std::vector<cand_t> res[NUM_THREAD] __attribute__((aligned(0x40)));
+std::string tasks[MAX_BATCH_SIZE] __attribute__((aligned(0x40)));
+int tp __attribute__((aligned(0x40))); //can be -1 so do not define as unsigned
+int sync_val __attribute__((aligned(0x40)));
 
 void *thread_main(void *arg){
     ThrArg *myqueue = (ThrArg*)arg;
