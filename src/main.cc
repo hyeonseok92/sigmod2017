@@ -10,7 +10,6 @@
 #include "trie.hpp"
 #include "thread_struct.h"
 
-
 TrieNode trie[NUM_THREAD] __attribute__((aligned(0x40)));
 pthread_t threads[NUM_THREAD] __attribute__((aligned(0x40)));
 unsigned int ts __attribute__((aligned(0x40)));
@@ -175,9 +174,6 @@ void workload(){
             ++worker->tail; // queue overflow is processed together when task overflow occured
         }
         else{
-#ifdef DBG_TS
-            std::cerr << ts << std::endl;
-#endif
             __sync_synchronize(); //Store Memory barrier
             ts++;
             __sync_synchronize(); //Prevent Code Relocation
@@ -194,21 +190,9 @@ int main(int argc, char *argv[]){
     stick_to_core(0);
     my_yield();
     std::ios::sync_with_stdio(false);
-#ifdef DBG_LOG
-    std::cerr<<"initTree done" << std::endl;
-#endif
     initThread();
-#ifdef DBG_LOG
-    std::cerr<<"initThread done" << std::endl;
-#endif
     input();
-#ifdef DBG_LOG
-    std::cerr<<"input done" << std::endl;
-#endif
     workload();
-#ifdef DBG_LOG
-    std::cerr<<"workload done" << std::endl;
-#endif
 /*
 // Not use when we remove global_flag
     destroyThread();

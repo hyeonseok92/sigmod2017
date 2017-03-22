@@ -18,6 +18,7 @@ struct cand_t{
 };
 
 #define MBYTE_SIZE sizeof(mbyte_t)
+#define NOT_NGRAM 0xFFFFFFFF
 
 #ifdef USE_CALLOC
 #define newTrieNode(x) do{\
@@ -53,7 +54,6 @@ struct cand_t{
     }\
 }while(0)
 
-#define NOT_NGRAM 0xFFFFFFFF
 
 inline void addNgram(TrieNode* node, const char *it){
     TrieMap::iterator temp;
@@ -102,7 +102,7 @@ inline void delNgram(TrieNode *node, const char *it){
 
         if (node->cache_ch == key){
             next = node->cache_next;
-            if (node->ts != NOT_NGRAM || (node->next.size() && !next->next.size())){
+            if (node->ts != NOT_NGRAM || node->next.size()){
                 last_branch = node;
                 last_branch_next = node->next.end();
             }
@@ -115,7 +115,7 @@ inline void delNgram(TrieNode *node, const char *it){
             return;
         next = temp->second;
         //If this is the end of a ngram or this node have more than 1 child node, and next have less than 2 child node
-        if (node->ts != NOT_NGRAM || (node->next.size() && !next->next.size())){ 
+        if (node->ts != NOT_NGRAM || node->next.size()){ 
             last_branch = node;
             last_branch_next = temp;
         }
