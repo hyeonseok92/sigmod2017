@@ -126,10 +126,12 @@ void *thread_main(void *arg){
                 if (best == NULL) break;
                 ++its[best_i];
                 const char *op = &tasks[best->task_id][best->offset];
-                if (*op == 'A') 
-                    addNgram(my_trie, op+2);
-                else if(*op == 'D')//Add / Del
-                    delNgram(my_trie, op+2);
+                if (best->offset == 0){//Add / Del
+                    if (*op == 'A') 
+                        addNgram(my_trie, op+2);
+                    else if(*op == 'D')
+                        delNgram(my_trie, op+2);
+                }
                 else{ //Query
                     if (last_query_id != best->task_id){
                         cnt_query++;
