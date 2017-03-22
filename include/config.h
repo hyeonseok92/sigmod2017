@@ -18,11 +18,11 @@ typedef std::unordered_map<mbyte_t, TrieNode*> TrieMap;
 
 #define MTASK_RESERVE 1000000
 #define RES_RESERVE 1000000
-#define MAX_BATCH_SIZE 2//10//10000000
+#define MAX_BATCH_SIZE 10000000
 #define BUF_RESERVE 10000
 #define Q_ID_RESERVE 10000
-#define NUM_THREAD 38
+#define NUM_THREAD 19
 //#define NEXT_RESERVE 1
 
-#define my_hash(x) (((mbyte_t)(x))%NUM_THREAD)
+#define my_hash(x) ((x)%NUM_THREAD)
 #define my_yield() __sync_synchronize()//pthread_yield()
