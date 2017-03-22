@@ -17,7 +17,7 @@ std::vector<mtask_t> mtasks[NUM_THREAD][NUM_THREAD];
 unsigned int ts = 0;
 ThrArg args[NUM_THREAD];
 
-std::string tasks[MAX_BATCH_SIZE+1];
+std::string tasks[MAX_BATCH_SIZE];
 std::vector<res_t> res[NUM_THREAD];
 
 int tp;
@@ -48,6 +48,10 @@ void *thread_main(void *arg){
     std::vector<res_t> *my_res = &res[tid];
     unsigned int cnt_query = 0;
     unsigned int last_query_id = 0xFFFFFFFF;
+    for (int i = 0; i < NUM_THREAD; i++)
+        my_mtasks[i].reserve(MTASK_RESERVE);
+    my_res->reserve(RES_RESERVE);
+    __sync_synchronize();
     __sync_fetch_and_add(&sync_val, 1);
 
     while(1){
@@ -179,9 +183,10 @@ void input(){
 
 void workload(){
     std::vector<unsigned int> q_task_ids;
-    for (int i = 0; i < NUM_BUF_RESERVE; i++){
+    for (int i = 0; i < MAX_BATCH_SIZE; i++){
         tasks[i].reserve(BUF_RESERVE);
     }
+    q_task_ids.reserve(Q_ID_RESERVE);
     global_flag = FLAG_SCAN;
     q_task_ids.emplace_back(0xFFFFFFFF);
     __sync_synchronize();
