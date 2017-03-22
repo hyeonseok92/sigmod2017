@@ -20,9 +20,9 @@ ThrArg args[NUM_THREAD];
 std::string tasks[MAX_BATCH_SIZE+1];
 std::vector<res_t> res[NUM_THREAD];
 
-int tp = 1;
-int preproc_tp = 1;
-int proc_tp = 1;
+int tp;
+int preproc_tp;
+int proc_tp;
 int global_flag;
 int sync_val;
 
@@ -46,7 +46,8 @@ void *thread_main(void *arg){
     TrieNode *my_trie = &trie[tid];
     std::vector<mtask_t> *my_mtasks = mtasks[tid];
     std::vector<res_t> *my_res = &res[tid];
-    std::vector<unsigned int*> backups;
+    unsigned int cnt_query = 0;
+    unsigned int last_query_id = 0xFFFFFFFF;
     __sync_fetch_and_add(&sync_val, 1);
 
     while(1){
@@ -125,18 +126,24 @@ void *thread_main(void *arg){
                     addNgram(my_trie, op+2);
                 else if(*op == 'D')//Add / Del
                     delNgram(my_trie, op+2);
-                else //Query
-                    queryNgram(my_res, &backups, best->task_id, my_trie, op);
+                else{ //Query
+                    if (last_query_id != best->task_id){
+                        cnt_query++;
+                        if (cnt_query == 0xFFFFFFFF){
+                            touchTrie(my_trie);
+                            cnt_query = 1;
+                        }
+                        last_query_id = best->task_id;
+                    }
+                    queryNgram(my_res, cnt_query, best->task_id, my_trie, op);
+                }
             }
             __sync_synchronize();
             __sync_fetch_and_add(&sync_val, 1);
             for (int i = 0; i < NUM_THREAD; i++)
                 my_mtasks[i].clear();
 
-            //Clear the last_task_id
-            for (std::vector<unsigned int*>::iterator it = backups.begin(); it!= backups.end(); it++)
-                **it = 0;
-            backups.clear();
+            last_query_id = 0xFFFFFFFF;
 
             while(global_flag == FLAG_PROC)
                 my_yield();
@@ -168,27 +175,6 @@ void input(){
             addNgram(&trie[my_hash(get_key(&buf[0]))],&buf[0]);
         }
     }
-}
-
-inline void print(){
-    /*
-    bool print_answer = false;
-    for (int i = 0; i < NUM_THREAD; i++){
-        while(finished[i] != ts) my_yield();
-        unsigned int my_sign = my_sign(ts, i);
-        for (std::vector<cand_t>::const_iterator it = res[i].begin(); it != res[i].end(); it++){
-            if (*it->from == my_sign){
-                if (print_answer)
-                    std::cout << "|";
-                print_answer = true;
-                std::cout.write(it->start, it->size);
-            }
-        }
-    }
-    if (!print_answer)
-        std::cout << -1;
-    std::cout << std::endl;
-    */
 }
 
 void workload(){
@@ -261,12 +247,12 @@ void workload(){
             }
             std::cout<<std::endl;
             fflush(stdout);
-            tp = 1;
+            tp = 0;
             std::getline(std::cin, tasks[tp]);
             if (tasks[tp][0] == '\0')
                 exit(0);
-            preproc_tp = 1;
-            proc_tp = 1;
+            preproc_tp = 0;
+            proc_tp = 0;
             q_task_ids.clear();
             __sync_synchronize();
             global_flag = FLAG_SCAN;
