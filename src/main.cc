@@ -183,6 +183,7 @@ void workload(){
         tasks[i].reserve(BUF_RESERVE);
     }
     global_flag = FLAG_SCAN;
+    q_task_ids.emplace_back(0xFFFFFFFF);
     __sync_synchronize();
     while(sync_val != NUM_THREAD)
         my_yield();
@@ -212,7 +213,7 @@ void workload(){
                 its[i] = res[i].begin();
 
             std::vector<unsigned int>::const_iterator qid = q_task_ids.begin();
-            bool printed = 0;
+            bool printed = false;
             while(1){
                 const res_t *best = NULL;
                 int best_i = 0;
@@ -230,9 +231,9 @@ void workload(){
                 }
                 if (best == NULL) break;
                 if (*qid != best->task_id){
-                    std::cout<<std::endl;
-                    qid++;
-                    for (; *qid != best->task_id; ++qid)
+                    if (printed)
+                        std::cout<<std::endl;
+                    for (++qid; *qid != best->task_id; ++qid)
                         std::cout << "-1" << std::endl;
                     printed = false;
                 }
@@ -245,18 +246,23 @@ void workload(){
 
                 ++its[best_i];
             }
-            std::cout<<std::endl;
+            if (printed)
+                std::cout<<std::endl;
+            for (++qid;qid != q_task_ids.end(); ++qid)
+                std::cout << "-1" << std::endl;
+
             fflush(stdout);
             tp = 0;
-            std::getline(std::cin, tasks[tp]);
-            if (tasks[tp][0] == '\0')
-                exit(0);
             preproc_tp = 0;
             proc_tp = 0;
-            q_task_ids.clear();
             __sync_synchronize();
             global_flag = FLAG_SCAN;
+            q_task_ids.clear();
+            q_task_ids.emplace_back(0xFFFFFFFF);
+            continue;
         }
+        if (tasks[tp][0] == '\0')
+            exit(0);
         __sync_synchronize();
         tp++;
     }
