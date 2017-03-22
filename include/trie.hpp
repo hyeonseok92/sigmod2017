@@ -22,12 +22,14 @@ struct cand_t{
 #ifdef USE_CALLOC
 #define newTrieNode(x) do{\
     (x) = (TrieNode*) calloc(1, sizeof(TrieNode));\
+    (x)->ts = NOT_NGRAM;\
     (x)->next = TrieMap();\
 }while(0)
 #define freeTrieNode(x) free(x)
 #else
 #define newTrieNode(x) do{\
     (x) = new TrieNode;\
+    (x)->ts = NOT_NGRAM;\
     (x)->cache_ch = 0;\
 }while(0)
 #define freeTrieNode(x) delete (x)
@@ -63,7 +65,6 @@ inline void addNgram(TrieNode* node, const char *it){
 
         if (node->cache_ch == 0){
             newTrieNode(newNode);
-            newNode->ts = NOT_NGRAM;
             node->cache_ch = key;
             node->cache_next = newNode;
             node = newNode;
@@ -76,7 +77,6 @@ inline void addNgram(TrieNode* node, const char *it){
         temp = node->next.find(key);
         if (temp == node->next.end()){
             newTrieNode(newNode);
-            newNode->ts = NOT_NGRAM;
             node->next[key] = newNode;
             node = newNode;
         }
