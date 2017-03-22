@@ -11,6 +11,37 @@
 #include "trie.hpp"
 #include "thread_struct.h"
 
+struct res_pq_t{
+    res_t *r;
+    res_t *end;
+};
+
+bool operator < (res_pq_t a, res_pq_t b){
+    if (a.r->task_id > b.r->task_id ||
+            (a.r->task_id == b.r->task_id && 
+             (a.r->start > b.r->start ||
+              (a.r->start == b.r->start && a.r->size > b.r->size))))
+        return true;
+    return false;
+}
+
+typedef std::priority_queue<res_pq_t> res_queue_t;
+
+struct mtask_pq_t{
+    mtask_t *m;
+    mtask_t *end;
+};
+bool operator < (mtask_pq_t a, mtask_pq_t b){
+    if (a.m->task_id > b.m->task_id ||
+            (a.m->task_id == b.m->task_id &&
+             a.m->offset > b.m->offset))
+        return true;
+    return false;
+}
+
+typedef std::priority_queue<mtask_pq_t> mtask_queue_t;
+
+
 TrieNode trie[NUM_THREAD] __attribute__((aligned(0x40)));
 pthread_t threads[NUM_THREAD] __attribute__((aligned(0x40)));
 std::vector<mtask_t> mtasks[NUM_THREAD][NUM_THREAD] __attribute__((aligned(0x40)));
@@ -43,6 +74,7 @@ void *thread_main(void *arg){
     TrieNode *my_trie = &trie[tid];
     std::vector<mtask_t> *my_mtasks = mtasks[tid];
     std::vector<res_t> *my_res = &res[tid];
+    mtask_queue_t queue;
     unsigned int cnt_query = 0;
     unsigned int last_query_id = 0xFFFFFFFF;
     //for (int i = 0; i < NUM_THREAD; i++)
@@ -104,45 +136,38 @@ void *thread_main(void *arg){
         else if (global_flag == FLAG_PROC){
             __sync_synchronize();
             int cur_batch = cnt_batch;
-            std::vector<mtask_t>::const_iterator its[NUM_THREAD];
-            for (int i = 0; i < NUM_THREAD; i++)
-                its[i] = my_mtasks[i].begin();
 
-            while(1){
-                const mtask_t *best = NULL;
-                int best_i = 0;
-                for (int i = 0; i < NUM_THREAD; i++){
-                    if (its[i] == my_mtasks[i].end()) //Terminated Result
-                        continue;
-
-                    if (best == NULL || best->task_id > its[i]->task_id ||
-                        (best->task_id == its[i]->task_id &&
-                        best->offset > its[i]->offset)){
-                        //task_id smaller first, offset smaller second
-                        best = &(*its[i]);
-                        best_i = i;
-                    }
+            for (int i = 0; i < NUM_THREAD; i++){
+                if (my_mtasks[i].size()){
+                    mtask_pq_t dum;
+                    dum.m = &my_mtasks[i][0];
+                    dum.end = &my_mtasks[i][my_mtasks[i].size()];
+                    queue.push(dum);
                 }
-                if (best == NULL) break;
-                ++its[best_i];
-                const char *op = &tasks[best->task_id][best->offset];
-                if (best->offset == 0){//Add / Del
+            }
+            while(!queue.empty()){
+                mtask_pq_t best = queue.top();
+                queue.pop();
+                const char *op = &tasks[best.m->task_id][best.m->offset];
+                if (best.m->offset == 0){//Add / Del
                     if (*op == 'A') 
                         addNgram(my_trie, op+2);
                     else if(*op == 'D')
                         delNgram(my_trie, op+2);
                 }
                 else{ //Query
-                    if (last_query_id != best->task_id){
+                    if (last_query_id != best.m->task_id){
                         cnt_query++;
                         if (cnt_query == 0xFFFFFFFF){
                             touchTrie(my_trie);
                             cnt_query = 1;
                         }
-                        last_query_id = best->task_id;
+                        last_query_id = best.m->task_id;
                     }
-                    queryNgram(my_res, cnt_query, best->task_id, my_trie, op);
+                    queryNgram(my_res, cnt_query, best.m->task_id, my_trie, op);
                 }
+                if (++best.m != best.end)
+                    queue.push(best);
             }
             __sync_synchronize();
             __sync_fetch_and_add(&sync_val, 1);
@@ -184,6 +209,7 @@ void input(){
 }
 
 void workload(){
+    res_queue_t queue;
     std::vector<unsigned int> q_task_ids;
 //    for (int i = 0; i < MAX_BATCH_SIZE/10; i++){
 //        tasks[i].reserve(BUF_RESERVE);
@@ -223,32 +249,25 @@ void workload(){
             }
             __sync_synchronize();
 
-            std::vector<res_t>::const_iterator its[NUM_THREAD];
-            for (int i = 0; i < NUM_THREAD; i++)
-                its[i] = res[i].begin();
+            for (int i = 0; i < NUM_THREAD; i++){
+                if (res[i].size()){
+                    res_pq_t dum;
+                    dum.r = &res[i][0];
+                    dum.end = &res[i][res[i].size()];
+                    queue.push(dum);
+                }
+            }
 
             std::vector<unsigned int>::const_iterator qid = q_task_ids.begin();
             bool printed = false;
-            while(1){
-                const res_t *best = NULL;
-                int best_i = 0;
-                for (int i = 0; i < NUM_THREAD; i++){
-                    if (its[i] == res[i].end())
-                        continue;
-                    if (best == NULL || best->task_id > its[i]->task_id ||
-                        (best->task_id == its[i]->task_id && 
-                        (best->start > its[i]->start ||
-                        (best->start == its[i]->start && best->size > its[i]->size)))){
-                        //task_id smaller first, start smaller second, size smaller third
-                        best = &(*its[i]);
-                        best_i = i;
-                    }
-                }
-                if (best == NULL) break;
-                if (*qid != best->task_id){
+            while(!queue.empty()){
+                res_pq_t best = queue.top();
+                queue.pop();
+
+                if (*qid != best.r->task_id){
                     if (printed)
                         std::cout<<std::endl;
-                    for (++qid; *qid != best->task_id; ++qid)
+                    for (++qid; *qid != best.r->task_id; ++qid)
                         std::cout << "-1" << std::endl;
                     printed = false;
                 }
@@ -257,9 +276,9 @@ void workload(){
                 else
                     printed = true;
 
-                std::cout.write(best->start, best->size);
-
-                ++its[best_i];
+                std::cout.write(best.r->start, best.r->size);
+                if (++best.r != best.end)
+                    queue.push(best);
             }
             if (printed)
                 std::cout<<std::endl;
