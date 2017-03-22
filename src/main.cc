@@ -17,22 +17,19 @@ std::vector<mtask_t> mtasks[NUM_THREAD][NUM_THREAD];
 unsigned int ts = 0;
 ThrArg args[NUM_THREAD];
 
-std::string tasks[MAX_BATCH_SIZE];
-char delimiter_chk[MAX_BATCH_SIZE];
-
+std::string tasks[MAX_BATCH_SIZE+1];
 std::vector<res_t> res[NUM_THREAD];
 
-int tp;
-int preproc_tp;
-int proc_tp;
+int tp = 1;
+int preproc_tp = 1;
+int proc_tp = 1;
 int global_flag;
 int sync_val;
 
-#define FLAG_IDLE 0
-#define FLAG_SCAN 1
-#define FLAG_PREPROC 2
-#define FLAG_PROC 3
-#define FLAG_END 4
+#define FLAG_SCAN 0
+#define FLAG_PREPROC 1
+#define FLAG_PROC 2
+#define FLAG_END 3
 
 inline mbyte_t get_key(const char *c){
     mbyte_t key = 0;
@@ -54,7 +51,8 @@ void *thread_main(void *arg){
     while(1){
         if (global_flag == FLAG_SCAN || global_flag == FLAG_PREPROC){
             int my_tp = __sync_fetch_and_add(&preproc_tp, 1);
-            while(my_tp >= tp && global_flag != FLAG_PROC) my_yield();
+            while(my_tp >= tp && global_flag != FLAG_PROC)
+                my_yield();
             if (my_tp >= tp && global_flag == FLAG_PROC)
                 continue;
 
@@ -97,18 +95,18 @@ void *thread_main(void *arg){
                 }
             }
             __sync_fetch_and_add(&proc_tp, 1);
+            __sync_synchronize();
         }
         else if (global_flag == FLAG_PROC){
-            //std::vector<mtask_t>::const_iterator its[NUM_THREAD];
-            const mtask_t *its[NUM_THREAD];
+            std::vector<mtask_t>::const_iterator its[NUM_THREAD];
             for (int i = 0; i < NUM_THREAD; i++)
-                its[i] = &my_mtasks[i][0];
+                its[i] = my_mtasks[i].begin();
 
             while(1){
                 const mtask_t *best = NULL;
                 int best_i = 0;
                 for (int i = 0; i < NUM_THREAD; i++){
-                    if (its[i] == &(*my_mtasks[i].rbegin())) //Terminated Result
+                    if (its[i] == my_mtasks[i].end()) //Terminated Result
                         continue;
 
                     if (best == NULL || best->task_id > its[i]->task_id ||
@@ -120,7 +118,7 @@ void *thread_main(void *arg){
                     }
                 }
                 if (best == NULL) break;
-                its[best_i]++;
+                ++its[best_i];
                 const char *op = &tasks[best->task_id][best->offset];
                 if (*op == 'A') 
                     addNgram(my_trie, op+2);
@@ -129,7 +127,9 @@ void *thread_main(void *arg){
                 else //Query
                     queryNgram(my_res, best->task_id, my_trie, op);
             }
-            while(global_flag != FLAG_PROC)
+            __sync_synchronize();
+            __sync_fetch_and_add(&sync_val, 1);
+            while(global_flag == FLAG_PROC)
                 my_yield();
         }
     }
@@ -181,16 +181,21 @@ inline void print(){
 }
 
 void workload(){
+    std::vector<unsigned int> q_task_ids;
     for (int i = 0; i < NUM_BUF_RESERVE; i++){
         tasks[i].reserve(BUF_RESERVE);
     }
     global_flag = FLAG_SCAN;
+    __sync_synchronize();
     while(sync_val != NUM_THREAD)
         my_yield();
     printf("R\n");
     fflush(stdout);
     while(1){
         std::getline(std::cin, tasks[tp]);
+        if (tasks[tp][0] == 'Q')
+            q_task_ids.emplace_back(tp);
+
         if (tasks[tp][0] == 'F' || tp >= MAX_BATCH_SIZE-1){
             global_flag = FLAG_PREPROC;
             sync_val = 0;
@@ -205,16 +210,17 @@ void workload(){
                 my_yield();
             __sync_synchronize();
 
-            //std::vector<res_t>::const_iterator its[NUM_THREAD];
-            const res_t *its[NUM_THREAD];
+            std::vector<res_t>::const_iterator its[NUM_THREAD];
             for (int i = 0; i < NUM_THREAD; i++)
-                its[i] = &res[i][0];
+                its[i] = res[i].begin();
 
+            std::vector<unsigned int>::const_iterator qid = q_task_ids.begin();
+            bool printed = 0;
             while(1){
                 const res_t *best = NULL;
                 int best_i = 0;
                 for (int i = 0; i < NUM_THREAD; i++){
-                    if (its[i] == &(*res[i].rbegin()))
+                    if (its[i] == res[i].end())
                         continue;
                     if (best == NULL || best->task_id > its[i]->task_id ||
                         (best->task_id == its[i]->task_id && 
@@ -226,16 +232,30 @@ void workload(){
                     }
                 }
                 if (best == NULL) break;
+                if (*qid != best->task_id){
+                    std::cout<<std::endl;
+                    qid++;
+                    for (; *qid != best->task_id; ++qid)
+                        std::cout << "-1" << std::endl;
+                    printed = false;
+                }
+                if (printed)
+                    std::cout << "|";
+                else
+                    printed = true;
+
                 std::cout.write(best->start, best->size);
+
                 ++its[best_i];
             }
+            std::cout<<std::endl;
             fflush(stdout);
-            tp = 0;
+            tp = 1;
             std::getline(std::cin, tasks[tp]);
             if (tasks[tp][0] == '\0')
                 exit(0);
-            preproc_tp = 0;
-            proc_tp = 0;
+            preproc_tp = 1;
+            proc_tp = 1;
             __sync_synchronize();
             global_flag = FLAG_SCAN;
         }

@@ -38,6 +38,7 @@ struct res_t{
 
 #define TRY_SIGN(node, task_id, res, s, e, r) do{\
     if ((node)->last_task_id < task_id){\
+        (node)->last_task_id = task_id;\
         r.start = s;\
         r.size = (e-s);\
         res->emplace_back(r);\
@@ -154,13 +155,13 @@ inline void queryNgram(std::vector<res_t> *res, unsigned int task_id, TrieNode* 
                 if (node->cache_ch == 0)
                     continue;
                 if (node->cache_ch == key){
-                    TRY_SIGN(node->cache_next, task_id, res, query, it, r);
+                    TRY_SIGN(node->cache_next, task_id, res, query, it+1, r);
                     continue;
                 }
 
                 temp = node->next.find(key);
                 if (temp != node->next.end())
-                    TRY_SIGN(temp->second, task_id, res, query, it, r);
+                    TRY_SIGN(temp->second, task_id, res, query, it+1, r);
             }
         }
         if (node->cache_ch == key){
@@ -173,7 +174,6 @@ inline void queryNgram(std::vector<res_t> *res, unsigned int task_id, TrieNode* 
             return;
         node = temp->second;
     }
-    it--;
     TRY_SIGN(node, task_id, res, query, it, r);
 }
 
