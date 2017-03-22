@@ -45,9 +45,9 @@ void *thread_main(void *arg){
     std::vector<res_t> *my_res = &res[tid];
     unsigned int cnt_query = 0;
     unsigned int last_query_id = 0xFFFFFFFF;
-    for (int i = 0; i < NUM_THREAD; i++)
-        my_mtasks[i].reserve(MTASK_RESERVE);
-    my_res->reserve(RES_RESERVE);
+    //for (int i = 0; i < NUM_THREAD; i++)
+    //    my_mtasks[i].reserve(MTASK_RESERVE);
+    //my_res->reserve(RES_RESERVE);
     __sync_synchronize();
     __sync_fetch_and_add(&sync_val, 1);
 
@@ -183,17 +183,17 @@ void input(){
 
 void workload(){
     std::vector<unsigned int> q_task_ids;
-    for (int i = 0; i < MAX_BATCH_SIZE/10; i++){
-        tasks[i].reserve(BUF_RESERVE);
-    }
-    q_task_ids.reserve(Q_ID_RESERVE);
+//    for (int i = 0; i < MAX_BATCH_SIZE/10; i++){
+//        tasks[i].reserve(BUF_RESERVE);
+//    }
+//    q_task_ids.reserve(Q_ID_RESERVE);
     global_flag = FLAG_SCAN;
     q_task_ids.emplace_back(0xFFFFFFFF);
     __sync_synchronize();
     while(sync_val != NUM_THREAD){
         my_yield();
     }
-    printf("R\n");
+    std::cout<<"R"<<std::endl;
     fflush(stdout);
     while(1){
         std::getline(std::cin, tasks[tp]);
