@@ -115,7 +115,7 @@ void *thread_main(void *arg){
                         (best->task_id == its[i]->task_id &&
                         best->offset > its[i]->offset)){
                         //task_id smaller first, offset smaller second
-                        best = &(*its[0]);
+                        best = &(*its[i]);
                         best_i = i;
                     }
                 }
@@ -225,7 +225,7 @@ void workload(){
                         (best->start > its[i]->start ||
                         (best->start == its[i]->start && best->size > its[i]->size)))){
                         //task_id smaller first, start smaller second, size smaller third
-                        best = &(*its[0]);
+                        best = &(*its[i]);
                         best_i = i;
                     }
                 }
