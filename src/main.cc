@@ -54,8 +54,9 @@ void *thread_main(void *arg){
     while(1){
         if (global_flag == FLAG_SCAN || global_flag == FLAG_PREPROC){
             int my_tp = __sync_fetch_and_add(&preproc_tp, 1);
-            while(my_tp >= tp && global_flag != FLAG_PROC)
+            while(my_tp >= tp && global_flag != FLAG_PROC){
                 my_yield();
+            }
             if (my_tp >= tp && global_flag == FLAG_PROC)
                 continue;
 
@@ -101,6 +102,7 @@ void *thread_main(void *arg){
             __sync_synchronize();
         }
         else if (global_flag == FLAG_PROC){
+            __sync_synchronize();
             int cur_batch = cnt_batch;
             std::vector<mtask_t>::const_iterator its[NUM_THREAD];
             for (int i = 0; i < NUM_THREAD; i++)
@@ -147,10 +149,11 @@ void *thread_main(void *arg){
 
             last_query_id = 0xFFFFFFFF;
 
-            while(global_flag == FLAG_PROC && cur_batch == cnt_batch)
+            while(global_flag == FLAG_PROC && cur_batch == cnt_batch){
                 my_yield();
-
+            }
             my_res->clear();
+            __sync_synchronize();
         }
     }
     pthread_exit((void*)NULL);
@@ -187,8 +190,9 @@ void workload(){
     global_flag = FLAG_SCAN;
     q_task_ids.emplace_back(0xFFFFFFFF);
     __sync_synchronize();
-    while(sync_val != NUM_THREAD)
+    while(sync_val != NUM_THREAD){
         my_yield();
+    }
     printf("R\n");
     fflush(stdout);
     while(1){
@@ -201,18 +205,20 @@ void workload(){
                 __sync_synchronize();
                 tp++;
             }
-            cnt_batch++;
-            global_flag = FLAG_PREPROC;
+            ++cnt_batch;
             sync_val = 0;
+            global_flag = FLAG_PREPROC;
             __sync_synchronize();
-            while(proc_tp != tp)
+            while(proc_tp != tp){
                 my_yield();
+            }
 
             __sync_synchronize();
             global_flag = FLAG_PROC;
             __sync_synchronize();
-            while(sync_val != NUM_THREAD)
+            while(sync_val != NUM_THREAD){
                 my_yield();
+            }
             __sync_synchronize();
 
             std::vector<res_t>::const_iterator its[NUM_THREAD];
